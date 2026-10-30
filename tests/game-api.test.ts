@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import type { GameState, Member } from "../lib/game";
 import type { SessionState } from '../lib/session';
+import type { WorldData } from '../lib/world';
 
 // Exercise the real route, replacing only Cloudflare's unavailable local binding.
 // Each query yields like a remote D1 request, so parallel actions race on revisions.
@@ -366,4 +367,78 @@ test('local and LAN mode never trust spoofed hosted-account headers', async t =>
   const privateRecovery = await spoofed({ type: 'recover', room: created.body.room, recoveryCode: created.body.recoveryCode });
   assert.equal(privateRecovery.status, 200);
   assert.equal(privateRecovery.body.me.id, created.body.me.id);
+});
+
+const campaignWorld = (snapshot: ApiSnapshot) => (snapshot.state as GameState & {world: WorldData}).world;
+const customStart = {name: 'The Glass Orchard', premise: 'The trees remember promises. Nobody here has heard of Lanternfall.', theme: 'forest', layout: 'generated', seed: 'orchard-one', arrangement: 'wilderness', density: 'balanced', encounter: 'none', companions: false};
+
+test('custom campaigns retain the GM premise and edition without forced starter story or characters', async () => {
+  const created = await post({type: 'create', name: 'Story GM', ruleSetId: 'srd-5.1', requireInvite: true, campaign: customStart});
+  assert.equal(created.status, 201);
+  const state = created.body.state, world = campaignWorld(created.body);
+  assert.equal(state.title, customStart.name);
+  assert.equal(state.narrative, customStart.premise);
+  assert.equal(state.ruleSetId, 'srd-5.1');
+  assert.equal(state.rules.narrative, '');
+  assert.deepEqual(state.tokens, []);
+  assert.deepEqual(world.campaign, {name: customStart.name, premise: customStart.premise});
+  assert.equal(world.currentScene?.generation?.seed, customStart.seed);
+  assert.equal(world.scenes.length, 1);
+  assert.ok(!JSON.stringify(state).includes('Mossfang'));
+  assert.ok(!JSON.stringify(state).includes('The Lantern Harbor'));
+  assert.equal(state.session?.inviteRequired, true);
+  const joined = await post({type: 'join', room: created.body.room, name: 'Their own hero', characterClass: 'druid', inviteCode: created.body.inviteCode});
+  assert.equal(joined.status, 201);
+  const hero = joined.body.state.tokens.find(token => token.id === joined.body.me.characterId)!;
+  assert.equal(hero.characterClass, 'druid');
+  assert.equal(joined.body.state.terrain[hero.y][hero.x], '.');
+  assert.equal(campaignWorld(joined.body).currentScene?.generation, undefined, 'players do not need the seed that reconstructs terrain');
+  assert.deepEqual(campaignWorld(joined.body).campaign, world.campaign);
+});
+
+test('saved generated worlds never reroll on fetch and separate seeds change the actual terrain', async () => {
+  const first = await post({type: 'create', name: 'Seed GM', campaign: customStart});
+  const same = await post({type: 'create', name: 'Same seed GM', campaign: customStart});
+  const other = await post({type: 'create', name: 'Other seed GM', campaign: {...customStart, seed: 'orchard-two'}});
+  assert.equal(first.status, 201); assert.equal(same.status, 201); assert.equal(other.status, 201);
+  assert.deepEqual(first.body.state.terrain, same.body.state.terrain);
+  assert.notDeepEqual(first.body.state.terrain, other.body.state.terrain);
+  const fetched = await GET(new Request(`http://localhost/api/game?room=${first.body.room}`, {headers: {Authorization: `Bearer ${first.body.token}`}}));
+  const saved = await fetched.json() as ApiSnapshot;
+  assert.deepEqual(saved.state.terrain, first.body.state.terrain);
+  assert.deepEqual(campaignWorld(saved).currentScene?.generation, campaignWorld(first.body).currentScene?.generation);
+  const freshA = await post({type: 'create', name: 'Fresh GM', campaign: {name: 'No fixed seed'}});
+  const freshB = await post({type: 'create', name: 'Fresh GM', campaign: {name: 'No fixed seed'}});
+  assert.notEqual(campaignWorld(freshA.body).currentScene?.generation?.seed, campaignWorld(freshB.body).currentScene?.generation?.seed);
+  assert.equal(freshA.body.state.narrative, '', 'missing premise does not invent a story');
+});
+
+test('blank campaigns are blank, sample companions are opt-in, and old creation stays compatible', async () => {
+  const blank = await post({type: 'create', name: 'Canvas GM', campaign: {...customStart, layout: 'blank', encounter: 'guardians', seed: ''}});
+  assert.equal(blank.status, 201);
+  assert.equal(blank.body.state.tokens.length, 0);
+  assert.equal(blank.body.state.objects.length, 0);
+  assert.equal(campaignWorld(blank.body).currentScene?.generation?.encounter, 'none');
+  const samples = await post({type: 'create', name: 'Sample GM', campaign: {...customStart, companions: true}});
+  assert.equal(samples.status, 201);
+  assert.equal(samples.body.state.tokens.filter(token => token.kind === 'hero').length, 2);
+  for (const hero of samples.body.state.tokens) {
+    assert.equal(samples.body.state.terrain[hero.y][hero.x], '.');
+    assert.ok(hero.sheet);
+    assert.ok(!samples.body.state.objects.some(object => object.x === hero.x && object.y === hero.y));
+  }
+  const legacy = await post({type: 'create', name: 'Legacy GM'});
+  assert.equal(legacy.status, 201);
+  assert.equal(legacy.body.state.title, 'The Lantern Harbor');
+  assert.equal(legacy.body.state.tokens.filter(token => token.kind === 'hero').length, 2);
+});
+
+test('invalid campaign settings fail before writing a campaign', async () => {
+  const invalid = [null, [], 'story', {...customStart, name: ''}, {...customStart, name: 'x'.repeat(51)}, {...customStart, premise: 'x'.repeat(2401)}, {...customStart, ambience: 'x'.repeat(101)}, {...customStart, companions: 'false'}, {...customStart, theme: 'unsupported'}, {...customStart, layout: 'random-anything'}, {...customStart, seed: 'x'.repeat(65)}, {...customStart, seed: ''}, {...customStart, arrangement: '__proto__'}, {...customStart, density: -1}, {...customStart, encounter: 'dragon'}, {...customStart, rules: {freeSpells: true}}];
+  for (const campaign of invalid) {
+    const before = rows.size;
+    const result = await post({type: 'create', name: 'Invalid GM', campaign});
+    assert.equal(result.status, 400, JSON.stringify(campaign));
+    assert.equal(rows.size, before, 'invalid options cannot leave a partial campaign');
+  }
 });

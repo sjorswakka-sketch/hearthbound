@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 
 let roomsCreated = 0;
+let checksPassed = 0;
 let currentCheck = 'validate local server address';
 const secrets = new Set();
 const hiddenFields = new Set(['tokenHash', 'recoveryHash', 'accountHash', 'inviteHash']);
@@ -41,6 +42,7 @@ function credentialFree(value) {
 }
 
 function passed(name) {
+  checksPassed += 1;
   console.log(`PASS ${name}`);
 }
 
@@ -69,7 +71,13 @@ async function main() {
   const post = (body, token, status = 200) => request({ body, token, status });
 
   currentCheck = 'create invitation-protected campaign';
-  const gm = await post({ type: 'create', name: 'Multiplayer smoke GM', ruleSetId: 'srd-5.2.1', requireInvite: true }, undefined, 201);
+  const campaign = {
+    name: 'The Unwinding Observatory',
+    premise: 'A clockwork moon has stopped above the observatory. Each visitor remembers a different sky.',
+    theme: 'cavern', layout: 'generated', seed: `smoke-${randomUUID()}`,
+    arrangement: 'rooms', density: 'balanced', encounter: 'none', companions: false,
+  };
+  const gm = await post({ type: 'create', name: 'Multiplayer smoke GM', ruleSetId: 'srd-5.2.1', requireInvite: true, campaign }, undefined, 201);
   roomsCreated += 1;
   ensure(gm.me?.role === 'gm' && gm.token && gm.recoveryCode && gm.inviteCode);
   ensure(gm.state.session?.inviteRequired === true && gm.state.session.inviteVersion === 1);
@@ -88,8 +96,18 @@ async function main() {
   const originalHero = player.me.characterId;
   passed(currentCheck);
 
+  currentCheck = 'share a custom premise while keeping generation choices GM-only';
+  ensure(gm.state.title === campaign.name && gm.state.narrative === campaign.premise);
+  ensure(gm.state.world.campaign.name === campaign.name && gm.state.world.campaign.premise === campaign.premise);
+  ensure(gm.state.world.currentScene.generation.seed === campaign.seed);
+  ensure(gm.state.tokens.length === 0 && gm.state.rules.narrative === '');
+  ensure(!JSON.stringify(gm.state).includes('The Lantern Harbor') && !JSON.stringify(gm.state).includes('Mossfang'));
+  ensure(player.state.narrative === campaign.premise && player.state.world.campaign.premise === campaign.premise);
+  ensure(!JSON.stringify(player.state).includes(campaign.seed) && !player.state.world.currentScene.generation);
+  passed(currentCheck);
+
   currentCheck = 'synchronize one world between GM and player';
-  const narration = 'Smoke check: everyone stands beneath the same harbor lantern.';
+  const narration = 'Smoke check: everyone watches the same clockwork moon begin to turn.';
   await act(gm.token, 'world', { op: 'sceneUpdate', name: 'Multiplayer smoke campaign', narration });
   await act(gm.token, 'world', { op: 'notes', text: 'Smoke check private GM notes.' });
   const gmView = await request({ room, token: gm.token });
@@ -101,9 +119,33 @@ async function main() {
   ensure(!JSON.stringify(playerView).includes('Smoke check private GM notes.'));
   passed(currentCheck);
 
+  currentCheck = 'travel through a new generated scene without rerolling the saved world';
+  const nextSeed = `travel-${randomUUID()}`;
+  const nextNarration = 'Silver branches bend toward a path that only appears at noon.';
+  const nextScene = await act(gm.token, 'world', {
+    op: 'sceneCreate', name: 'The Noon Orchard', preset: 'forest', layout: 'generated',
+    seed: nextSeed, arrangement: 'settlement', density: 'dense', encounter: 'scouts',
+    narration: nextNarration, ambience: 'Noon · Silver leaves and silence',
+  });
+  ensure(nextScene.state.world.activeScene !== gmView.state.world.activeScene);
+  ensure(nextScene.state.world.currentScene.generation.seed === nextSeed);
+  ensure(nextScene.state.narrative === nextNarration && nextScene.state.ruleSetId === 'srd-5.2.1');
+  ensure(JSON.stringify(nextScene.state.terrain) !== JSON.stringify(gmView.state.terrain));
+  const travelledPlayer = await request({ room, token: player.token });
+  ensure(travelledPlayer.state.world.activeScene === nextScene.state.world.activeScene);
+  ensure(travelledPlayer.state.narrative === nextNarration && travelledPlayer.state.world.campaign.premise === campaign.premise);
+  ensure(JSON.stringify(travelledPlayer.state.terrain) === JSON.stringify(nextScene.state.terrain));
+  ensure(!JSON.stringify(travelledPlayer.state).includes(nextSeed) && !JSON.stringify(travelledPlayer.state).includes(campaign.seed));
+  const returned = await act(gm.token, 'world', {op: 'sceneSwitch', sceneId: gmView.state.world.activeScene});
+  ensure(returned.state.narrative === narration);
+  ensure(JSON.stringify(returned.state.terrain) === JSON.stringify(gmView.state.terrain));
+  ensure(returned.state.world.currentScene.generation.seed === campaign.seed);
+  passed(currentCheck);
+
   currentCheck = 'deny GM controls to players';
   await act(player.token, 'opening', { text: 'Unauthorized opening' }, 403);
   await act(player.token, 'world', { op: 'notes', text: 'Unauthorized notes' }, 403);
+  await act(player.token, 'world', { op: 'sceneCreate', name: 'Unauthorized scene', preset: 'forest', layout: 'blank' }, 403);
   await act(player.token, 'session', { op: 'lock', locked: true }, 403);
   await post({ type: 'invite', room }, player.token, 403);
   await request({ room, token: player.token, archive: true, status: 403 });
@@ -172,6 +214,7 @@ async function main() {
 
 try {
   await main();
+  console.log(`Checks passed: ${checksPassed}`);
   console.log(`Campaigns created: ${roomsCreated}`);
 } catch {
   // Do not print errors, response bodies, URLs, tokens or recovery/invite codes.

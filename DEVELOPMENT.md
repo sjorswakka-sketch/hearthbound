@@ -75,3 +75,9 @@ Before broad public hosting, add stronger abuse/rate controls and a tested datab
 Reuse `.openai/hosting.json` when updating this Site. Another deployment needs its own hosting configuration and D1 binding. The public repository is `sjorswakka-sketch/hearthbound`; `origin` is separate from Sites source storage. The hosted Site remains owner-private until its sharing settings are changed. Do not force-push to reconcile the two source destinations.
 
 `.github/workflows/windows-test.yml` validates Windows setup and packages committed source. Successful `main` pushes provide an Actions artifact; new `v*` tags publish a release ZIP. Do not move released tags. GitHub packaging does not redeploy the Site. Never commit credentials, local databases or generated dependencies.
+
+## Procedural campaign creation (v0.4)
+
+`lib/world-generator.ts` is a deterministic, bounded layout generator shared by the preview and server. It uses a separate seeded PRNG; actual game dice retain cryptographic randomness. Blank maps have no objects or encounters. Generated maps reserve party arrival space and keep usable floor connected. Inputs are validated server-side before changing a campaign; previews never mutate saved worlds.
+
+New UI campaigns send an explicit campaign configuration. Older clients that omit it preserve the legacy start, and existing saved campaigns keep their worlds. The campaign premise is public narration, not a program or AI instruction. Generation metadata is GM-only so players cannot reconstruct fogged maps from the seed. Keep source tests for layout variety, reproducibility, placement, connectivity, invalid inputs and privacy when changing the algorithm.

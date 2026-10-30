@@ -1,4 +1,4 @@
-# Test Hearthbound v0.3 on Windows
+# Test Hearthbound v0.4 on Windows
 
 This package runs Hearthbound on Windows and opens it in your browser. It is a source-based test package, not a standalone EXE. You do not need Git or a developer account to run an extracted copy.
 
@@ -8,7 +8,7 @@ This package runs Hearthbound on Windows and opens it in your browser. It is a s
 2. Download **Hearthbound-Windows-test.zip** from [Hearthbound Releases](https://github.com/sjorswakka-sketch/hearthbound/releases). The repository is public; no repository invitation is needed. You can also receive the ZIP directly.
 3. Right-click the ZIP and choose **Extract All**. Open its **Hearthbound** folder in a writable location such as Documents. Do not run inside the ZIP or Program Files.
 4. Double-click **START-HEARTHBOUND.cmd**. Initial setup needs internet to download dependencies, build the app and prepare its database. Keep the launcher open while playing.
-5. Your browser opens at **http://127.0.0.1:8787**. Create a table and choose D&D 2014/SRD 5.1 or D&D 2024/SRD 5.2.1.
+5. Your browser opens at **http://127.0.0.1:8787**. Enter your GM name, click **Design your world**, name your campaign and write its opening. Preview your first map and choose D&D 2014/SRD 5.1 or D&D 2024/SRD 5.2.1. Sample heroes and encounters are optional.
 6. Open **Adventure desk → Session**, copy your personal recovery code, and store it privately.
 
 Stop the server with **Ctrl+C** in the launcher. Only one local copy can use port 8787. Both complete rulebooks and PDFs are included locally; after setup, local play and the rule library do not require an AI connection.
@@ -47,7 +47,7 @@ In **Adventure desk → Session**, the GM can replace an invitation to revoke ol
 
 The GM can assign a hero to a member or release it for GM control outside combat. Each member owns at most one hero. **Remove & close table** revokes that player's current session and recovery code, preserves their hero and closes new joining. Replace the invitation before reopening if you want a different group; seat removal is not an account ban.
 
-The GM can download a JSON campaign archive containing the world, sheets, hidden scenes and private notes. It omits access credentials. Keep it private. Archive import is not available in v0.3, so the download is a readable record, not a restorable backup; preserve the host's saved database for continued play.
+The GM can download a JSON campaign archive containing the world, sheets, hidden scenes and private notes. It omits access credentials. Keep it private. Archive import is not available in v0.4, so the download is a readable record, not a restorable backup; preserve the host's saved database for continued play.
 
 ## Restore a GM or player session
 
@@ -59,7 +59,15 @@ Your **table code** identifies the campaign, and the GM's **invitation** admits 
 
 On a supported hosted server, leaving the recovery field blank can restore the single campaign seat linked to your signed-in account. Local and LAN play need the personal code. If your hosted account has multiple seats in a campaign, use that seat's code. Older sessions may have no saved recovery code; generate one from **Session** while the original browser still has access. Generating a replacement rotates both credentials and invalidates other browsers using the old seat. Switching tables retains saved credentials in that browser.
 
-## What to try in v0.3
+## Create a different adventure
+
+Choose **Generated** for a fresh map, **Blank canvas** to build from an empty map, or **Authored template** for a prepared starting point. The six settings offer different palettes and map features; arrangement and density shape generated geometry. The preview is the map that will be created. Rerolling changes only the draft. Advanced settings expose a repeatable layout seed.
+
+Your opening premise is shared exactly as written. This does not use AI or understand arbitrary world descriptions. Add further locations through **World editor**, with their own names, introductions and map settings. The whole party travels together. Existing locations retain their edits and campaign rules stay pinned.
+
+## What to try in v0.4
+
+- **Creative starts:** create two campaigns with different names, premises and map settings. Reroll and confirm geometry changes. Reuse a seed and settings to reproduce a draft; choose Blank canvas and verify no sample enemies or objects appear. Leave sample heroes off and invite a player with their own character.
 
 - **Rulebooks:** search both editions for a spell, class and monster, then open the original PDF at that page. The library contains all 403 SRD 5.1 pages and all 364 SRD 5.2.1 pages.
 - **Characters:** join with any of twelve classes. Ask the GM to configure level, abilities and skills; save inventory/behavior notes; roll a check or save. Rebuilding a sheet resets derived statistics and resources.

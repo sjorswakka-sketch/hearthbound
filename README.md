@@ -1,4 +1,4 @@
-# Hearthbound — v0.3 test edition
+# Hearthbound — v0.4 test edition
 
 Hearthbound is a shared visual fantasy tabletop for one Game Master and up to seven players. Everyone at a table explores the same persistent map, with character sheets, dice, turns, narration and GM-controlled rules.
 
@@ -18,7 +18,7 @@ The [GitHub repository](https://github.com/sjorswakka-sketch/hearthbound) is pub
 
 ## Start a session
 
-1. Create a table as GM and choose its rules edition. New tables require an invitation; share the invitation from **Adventure desk → Session** with your group.
+1. Enter your GM name and choose **Design your world**. Name the campaign, write your own opening and preview a generated map, a blank canvas or an authored template. Choose its rules edition. New tables require an invitation; share it from **Adventure desk → Session**.
 2. Players join from separate browser sessions and choose one of twelve classes. The GM reviews each starting profile against the selected SRD.
 3. Open **Adventure desk → Session** and privately save your personal recovery code. Each participant has their own code.
 4. Use the GM panel to publish opening narration and **Set Rule** for movement, friendly fire and house rules.
@@ -28,12 +28,13 @@ The [GitHub repository](https://github.com/sjorswakka-sketch/hearthbound) is pub
 
 For a multiplayer check on one computer, use a normal browser for the GM and a private window for a player. Updates appear after a short polling delay.
 
-## What v0.3 supports
+## What v0.4 supports
 
 - **Characters:** all twelve single-class starting profiles, GM-controlled levels 1–20 and ability/skill setup, derived statistics, inventory notes and character behavior notes. The GM can adjust statistics with a recorded reason.
 - **Core play:** authoritative movement, walls, water and closed doors; initiative, attacks, armor class, critical damage and supported Extra Attack progression; ability/skill checks, saves and advantage/disadvantage.
 - **Resources:** action, bonus action and reaction tracking; Dash, Dodge, Disengage, Help, Ready and standing from prone; conditions with selected mechanical effects, edition-specific exhaustion, death saves and GM-approved HP changes/revival.
 - **Spellcasting and rests:** eight spells with GM-approved access and automatic supported outcomes: Cure Wounds, Healing Word, Fire Bolt, Sacred Flame, Magic Missile, Inflict Wounds, Burning Hands and Fireball. Includes edition-specific effects, upcasting, cantrip scaling, attacks/saves, HP changes, concentration checks, slot/action use and map targeting. Other spells retain a manual resource tracker. Single-class spell/Pact Magic slots, Hit Dice and GM-granted rest recovery remain available.
+- **Creative starts:** your own campaign name and shared opening premise; generated layouts with fresh variations, a blank canvas, or an authored template. Choose the setting, arrangement, density and optional example encounters. Sample heroes are opt-in. Preview and reroll before creation; use a saved seed to repeat an intentional layout. The generator does not interpret free text or use AI.
 - **World building:** up to twelve persistent scenes with harbor, forest, crypt, tavern, cavern and ruins templates; terrain/object painting, creature placement and area fog brushes. Scene travel carries the party together and preserves terrain, objects, creatures, narration, theme and ambience. Shared map pings briefly highlight a location for the group.
 - **Privacy:** GM-controlled fog with server-filtered concealed terrain, objects and creatures, private GM notes, and hidden-scene filtering. Players cannot act on unrevealed destinations or targets. Shared chat and narration remain public to the table.
 - **Sessions:** database persistence, concurrent update checks, revocable invitations, joining locks, hero assignment, player removal, rotating private recovery codes and supported hosted-account recovery. GM archives omit access credentials; importing an archive is not yet supported.
@@ -50,6 +51,8 @@ Inventory entries do not automatically equip, consume or grant items. Opening a 
 Condition handling is partial. Cover, line of sight, automatic lighting/vision, opportunity-attack triggers, detailed grappling, feature durations and many special interactions need a ruling. Help and Ready track action use; their precise effects and triggers are manual. Rest eligibility, elapsed time, daily limits and additional feature recovery are also manual. Free-text house rules and character behavior are guidance, not executable instructions.
 
 Fog is manually revealed by the GM; it does not calculate individual sight or darkvision. Character notes on visible tokens are shared, so put secrets in **Private GM notes**. With fog enabled, non-public mechanical logs are withheld from players to avoid revealing concealed information. History retains the most recent 100 log entries.
+
+Map generation is procedural: the same seed and settings reproduce a layout, while a fresh seed changes its geometry and placements. It does not generate adventures from the meaning of a prompt, simulate arbitrary fantasy settings, or change D&D rules. Your premise is shared verbatim and the GM builds on it. Existing campaigns and edited maps stay as saved until the GM creates or edits a location.
 
 The optional AI assistant drafts narration, NPC dialogue or rules discussion for GM review. It does not automatically build maps, act for characters or apply game changes. It stays disabled without host configuration; play and rulebooks work without AI. Provider access, available credits and usage costs depend on the host's provider account.
 

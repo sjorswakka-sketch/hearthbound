@@ -1,6 +1,7 @@
 import {GameError,addPlayer,cleanText,createInitialState,type Action} from '@/lib/game';
 import {accountHash,database,digest,failure,generateCode,getRoom,identity,jsonBody,reply,roomCode,save,secret,snapshot,type StoredMember} from '@/lib/campaign-store';
-import {applyWorldAction,applyVisibleAction} from '@/lib/world';
+import {applyWorldAction,applyVisibleAction,initializeCampaign} from '@/lib/world';
+import {parseCampaignStart} from '@/lib/campaign-start';
 import {applySessionAction,campaignArchive,requireGm,requireJoinAccess,rotateInvitation} from '@/lib/session';
 export const dynamic='force-dynamic';
 export async function GET(request:Request){try{
@@ -17,8 +18,9 @@ export async function POST(request:Request){try{
  if(body.type==='create'){
   if(body.requireInvite!==undefined&&typeof body.requireInvite!=='boolean')throw new GameError('Choose whether an invitation is required.');
   const ruleSetId=body.ruleSetId??'srd-5.2.1';if(!['srd-5.1','srd-5.2.1'].includes(String(ruleSetId)))throw new GameError('Choose an official SRD ruleset.');
+  const campaign=body.campaign===undefined?undefined:parseCampaignStart(body.campaign);
   const token=secret(),recoveryCode=secret(),inviteCode=body.requireInvite?secret():undefined,inviteHash=inviteCode?await digest(inviteCode):undefined;const member:StoredMember={id:crypto.randomUUID(),name:cleanText(body.name,30)||'Game Master',role:'gm',tokenHash:await digest(token),recoveryHash:await digest(recoveryCode),accountHash:await accountHash(request)};
-  for(let n=0;n<5;n++){const code=generateCode(),state=createInitialState(code,member,ruleSetId as 'srd-5.1'|'srd-5.2.1');if(inviteHash)rotateInvitation(state,member,inviteHash);const result=await database().prepare('INSERT INTO game_rooms (code, revision, state_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(code) DO NOTHING').bind(code,0,JSON.stringify(state),new Date().toISOString()).run();if(result.meta.changes===1)return reply({...snapshot(state,member),token,recoveryCode,...(inviteCode?{inviteCode}:{})},201);}
+  for(let n=0;n<5;n++){const code=generateCode(),state=createInitialState(code,member,ruleSetId as 'srd-5.1'|'srd-5.2.1');if(campaign)initializeCampaign(state,campaign);if(inviteHash)rotateInvitation(state,member,inviteHash);const result=await database().prepare('INSERT INTO game_rooms (code, revision, state_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(code) DO NOTHING').bind(code,0,JSON.stringify(state),new Date().toISOString()).run();if(result.meta.changes===1)return reply({...snapshot(state,member),token,recoveryCode,...(inviteCode?{inviteCode}:{})},201);}
   throw new GameError('Could not create a table. Please retry.',503);
  }
  if(body.type==='join'){

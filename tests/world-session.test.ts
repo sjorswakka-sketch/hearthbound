@@ -19,6 +19,60 @@ const gm: Member = { id: 'gm-world', name: 'GM', role: 'gm', tokenHash: 'secret-
 const action = (op: string, fields: Record<string, unknown> = {}): Action => ({ id: crypto.randomUUID(), type: 'world', op, ...fields });
 const world = (state: GameState) => (state as GameState & { world: WorldData }).world;
 
+test('custom scenes persist their own map, narration and GM-only generation settings across travel', () => {
+  const state = createInitialState('CUSTOM', gm, 'srd-5.1');
+  const narration = 'A clockwork orchard hangs beneath an unfinished moon.';
+  const options = {name: 'Clockwork Orchard', preset: 'forest', layout: 'generated', seed: 'an-unfinished-moon', arrangement: 'wilderness', density: 'dense', encounter: 'none', narration, ambience: 'Still air · Distant gears'};
+  applyWorldAction(state, gm, action('sceneCreate', options));
+  const firstScene = world(state).activeScene, firstMap = [...state.terrain];
+  assert.equal(state.narrative, narration);
+  assert.equal(state.ruleSetId, 'srd-5.1');
+  assert.equal(state.tokens.filter(token => token.kind === 'enemy').length, 0);
+  const metadata = world(visibleState(state, gm)).currentScene!;
+  assert.equal(metadata.generation?.seed, options.seed);
+  assert.equal(metadata.ambience, options.ambience);
+  applyWorldAction(state, gm, action('sceneCreate', {...options, name: 'Another Orchard', seed: 'a-different-moon'}));
+  assert.notDeepEqual(state.terrain, firstMap);
+  applyWorldAction(state, gm, action('sceneSwitch', {sceneId: firstScene}));
+  assert.deepEqual(state.terrain, firstMap);
+  assert.equal(state.narrative, narration);
+  assert.equal(world(visibleState(state, gm)).currentScene?.generation?.seed, options.seed);
+  const player: Member = {id: 'custom-player', name: 'Explorer', role: 'player'};
+  addPlayer(state, player, 'bard');
+  assert.ok(!JSON.stringify(visibleState(state, player)).includes(options.seed));
+  worldData(state).fogEnabled = true;
+  const fogged = visibleState(state, player);
+  assert.ok(!JSON.stringify(fogged).includes(options.seed));
+  assert.equal(world(fogged).currentScene?.narration, narration);
+});
+
+test('blank and template creation honor explicit encounter choices without silently adding a story', () => {
+  const state = createInitialState('BLANKS', gm);
+  applyWorldAction(state, gm, action('sceneCreate', {name: 'An empty canvas', preset: 'crypt', layout: 'blank', seed: '', encounter: 'guardians'}));
+  assert.equal(state.objects.length, 0);
+  assert.equal(state.tokens.filter(token => token.kind === 'enemy').length, 0);
+  assert.equal(state.narrative, '');
+  assert.equal(world(visibleState(state, gm)).currentScene?.generation?.encounter, 'none');
+  applyWorldAction(state, gm, action('sceneCreate', {name: 'A peaceful ruin', preset: 'ruins', layout: 'template', seed: '', encounter: 'none', narration: '', ambience: ''}));
+  assert.equal(state.tokens.filter(token => token.kind === 'enemy').length, 0);
+  assert.equal(state.narrative, '');
+  assert.equal(world(visibleState(state, gm)).currentScene?.ambience, '');
+  assert.ok(state.objects.length > 0, 'authored architecture is retained when encounters are removed');
+});
+
+test('invalid scene generation cannot replace a current scene or bypass GM authority', () => {
+  const state = createInitialState('BADMAP', gm);
+  worldData(state);
+  const original = structuredClone(state);
+  const fields = {name: 'Invalid map', preset: 'forest', layout: 'generated', seed: 'safe-seed'};
+  for (const mutation of [{seed: ''}, {layout: 'anything'}, {arrangement: '__proto__'}, {density: 'infinite'}, {encounter: 'dragon'}, {narration: 'x'.repeat(2401)}, {ambience: 'x'.repeat(101)}]) {
+    assert.throws(() => applyWorldAction(state, gm, action('sceneCreate', {...fields, ...mutation})));
+    assert.deepEqual(state, original);
+  }
+  assert.throws(() => applyWorldAction(state, {id: 'player', name: 'Player', role: 'player'}, action('sceneCreate', fields)), /Only the GM/);
+  assert.deepEqual(state, original);
+});
+
 test('world editing is GM-only, and protected occupied tiles cannot be overwritten', () => {
   const state = createInitialState('WORLD2', gm, 'srd-5.2.1');
   const player: Member = { id: 'player', name: 'Mira', role: 'player' };

@@ -1,11 +1,13 @@
-import { GameError, applyAction, publicState, type GameState, type Member, type Token, type GameObject, type Action } from '@/lib/game';
+import { GameError, applyAction, publicState, normalizeState, type GameState, type Member, type Token, type GameObject, type Action } from '@/lib/game';
 import { isSceneTheme, sceneLayout, sceneTemplate, type SceneInfo, type SceneTheme } from '@/lib/scenes';
 import { publicSession } from '@/lib/session';
 import { spellAreaCells, type SpellId } from '@/lib/spells';
+import { generateSceneLayout, parseGenerationOptions, type GenerationOptions } from '@/lib/world-generator';
+import type { CampaignStart } from '@/lib/campaign-start';
 
-type Scene = { id: string; name: string; terrain: string[]; objects: GameObject[]; enemies: Token[]; revealed: string[]; theme?: SceneTheme; ambience?: string; narration?: string };
+type Scene = { id: string; name: string; terrain: string[]; objects: GameObject[]; enemies: Token[]; revealed: string[]; theme?: SceneTheme; ambience?: string; narration?: string; generation?: GenerationOptions };
 export type MapPing = { id: string; memberId: string; x: number; y: number; createdAt: number; expiresAt: number };
-export type WorldData = { fogEnabled: boolean; revealed: string[]; gmNotes: string; activeScene: string; scenes: Scene[]; pings?: MapPing[]; currentScene?: SceneInfo };
+export type WorldData = { fogEnabled: boolean; revealed: string[]; gmNotes: string; activeScene: string; scenes: Scene[]; pings?: MapPing[]; currentScene?: SceneInfo & { generation?: GenerationOptions }; campaign?: { name: string; premise: string } };
 type WorldState = GameState & { world?: WorldData; session?: ReturnType<typeof publicSession> };
 const key = (x: number, y: number) => x + ',' + y;
 
@@ -25,8 +27,8 @@ export function worldData(state: GameState): WorldData {
   }
   return w;
 }
-function sceneInfo(s: GameState, w: WorldData, scene: Scene): SceneInfo {
-  return { id: scene.id, name: scene.name, theme: legacyTheme(scene), ambience: scene.ambience ?? sceneTemplate(scene.theme).ambience, narration: scene.id === w.activeScene ? s.narrative : scene.narration ?? sceneTemplate(scene.theme).narration };
+function sceneInfo(s: GameState, w: WorldData, scene: Scene, includeGeneration = false): SceneInfo & { generation?: GenerationOptions } {
+  return { id: scene.id, name: scene.name, theme: legacyTheme(scene), ambience: scene.ambience ?? sceneTemplate(scene.theme).ambience, narration: scene.id === w.activeScene ? s.narrative : scene.narration ?? sceneTemplate(scene.theme).narration, ...(includeGeneration && scene.generation ? { generation: { ...scene.generation } } : {}) };
 }
 function log(s: GameState, text: string) { s.log.push({ id: crypto.randomUUID(), kind: 'world', text, at: new Date().toISOString() }); s.log = s.log.slice(-100); }
 function number(v: unknown, min: number, max: number) { if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) throw new GameError('Choose a valid map value.'); return v; }
@@ -51,6 +53,29 @@ function switchScene(s: GameState, w: WorldData, scene: Scene) {
   s.title = scene.name; s.narrative = scene.narration ?? sceneTemplate(scene.theme).narration;
 }
 function record(s: GameState, m: Member, a: Action) { s.processed = [...(s.processed ?? []), { id: a.id, memberId: m.id }].slice(-160); }
+
+function buildScene(s: GameState, name: string, theme: SceneTheme, narration: string, ambience: string, generation?: GenerationOptions): Scene {
+  const layout = generation ? generateSceneLayout(generation, s.width, s.height) : sceneLayout(theme, s.width, s.height);
+  const template = sceneTemplate(theme);
+  return {
+    id: crypto.randomUUID(), name, theme, ambience, narration, ...(generation ? { generation: { ...generation } } : {}),
+    terrain: layout.terrain, revealed: [], objects: layout.objects.map(object => ({ ...object, id: crypto.randomUUID() })),
+    enemies: layout.enemies.map(enemy => ({ id: crypto.randomUUID(), name: enemy.name, kind: 'enemy', characterClass: generation ? 'creature' : 'goblin', hp: enemy.hp, maxHp: enemy.hp, ac: enemy.ac, speed: 30, x: enemy.x, y: enemy.y, color: template.accent, attackBonus: enemy.attackBonus, damageDie: enemy.damageDie, range: 1 })),
+  };
+}
+
+/** Called only while creating a new campaign, never to regenerate a saved world. */
+export function initializeCampaign(s: GameState, campaign: CampaignStart) {
+  const { name, premise, ambience, companions, ...generation } = campaign;
+  const scene = buildScene(s, name, generation.theme, premise, ambience, generation);
+  s.tokens = companions ? s.tokens.filter(token => token.kind === 'hero') : [];
+  const w: WorldData = { fogEnabled: false, revealed: [], gmNotes: '', activeScene: '', scenes: [], pings: [], campaign: { name, premise } };
+  switchScene(s, w, scene); w.scenes.push(scene);
+  (s as WorldState).world = w;
+  s.rules.narrative = '';
+  s.log = [{ id: crypto.randomUUID(), kind: 'story', text: `The adventure begins at ${name}.`, at: new Date().toISOString() }];
+  normalizeState(s);
+}
 
 export function applyWorldAction(s: GameState, m: Member, a: Action) {
   if (typeof a.id !== 'string' || a.id.length < 8 || a.id.length > 100) throw new GameError('A valid action ID is required.');
@@ -90,13 +115,17 @@ export function applyWorldAction(s: GameState, m: Member, a: Action) {
     if (s.combat.active) throw new GameError('End the encounter before editing terrain or changing scenes.');
     if (a.op === 'sceneCreate') {
       if (w.scenes.length >= 12) throw new GameError('This campaign supports up to 12 scenes.');
-      if (!isSceneTheme(a.preset)) throw new GameError('Choose a scene template.');
-      const template = sceneTemplate(a.preset), layout = sceneLayout(a.preset, s.width, s.height);
-      const scene: Scene = {
-        id: crypto.randomUUID(), name: text(a.name, 50), theme: a.preset, ambience: template.ambience, narration: template.narration,
-        terrain: layout.terrain, revealed: [], objects: layout.objects.map(o => ({ ...o, id: crypto.randomUUID() })),
-        enemies: layout.enemies.map(enemy => ({ id: crypto.randomUUID(), name: enemy.name, kind: 'enemy', characterClass: 'goblin', hp: enemy.hp, maxHp: enemy.hp, ac: enemy.ac, speed: 30, x: enemy.x, y: enemy.y, color: template.accent, attackBonus: enemy.attackBonus, damageDie: enemy.damageDie, range: 1 })),
-      };
+      const theme = a.theme ?? a.preset;
+      if (!isSceneTheme(theme)) throw new GameError('Choose a scene theme.');
+      let generation: GenerationOptions | undefined;
+      if (a.layout !== undefined) {
+        try { generation = parseGenerationOptions({ layout: a.layout, theme, seed: a.seed ?? crypto.randomUUID(), arrangement: a.arrangement ?? 'wilderness', density: a.density ?? 'balanced', encounter: a.encounter ?? 'none' }); }
+        catch (error) { throw new GameError(error instanceof Error ? error.message : 'Choose valid map settings.'); }
+      }
+      const template = sceneTemplate(theme);
+      const narration = a.narration === undefined ? generation && generation.layout !== 'template' ? '' : template.narration : text(a.narration, 2400, true);
+      const ambience = a.ambience === undefined ? generation && generation.layout !== 'template' ? '' : template.ambience : text(a.ambience, 100, true);
+      const scene = buildScene(s, text(a.name, 50), theme, narration, ambience, generation);
       switchScene(s, w, scene); w.scenes.push(scene); log(s, 'The party enters ' + scene.name + '.');
     } else if (a.op === 'sceneSwitch') {
       const scene = w.scenes.find(c => c.id === a.sceneId); if (!scene) throw new GameError('Scene not found.');
@@ -128,9 +157,10 @@ export function visibleState(s: GameState, m: Member): GameState {
   out.session = publicSession(s);
   out.world = {
     fogEnabled: w.fogEnabled, revealed: [...w.revealed], gmNotes: m.role === 'gm' ? w.gmNotes : '', activeScene: w.activeScene,
-    currentScene: current ? sceneInfo(s, w, current) : undefined,
+    currentScene: current ? sceneInfo(s, w, current, m.role === 'gm') : undefined,
+    ...(w.campaign ? { campaign: { name: w.campaign.name, premise: w.campaign.premise } } : {}),
     pings: (w.pings ?? []).filter(p => p.expiresAt > Date.now()).map(p => ({ ...p })),
-    scenes: w.scenes.map(c => ({ ...(m.role === 'gm' || c.id === w.activeScene ? sceneInfo(s, w, c) : { id: c.id, name: c.name }), terrain: [], objects: [], enemies: [], revealed: [] })),
+    scenes: w.scenes.map(c => ({ ...(m.role === 'gm' || c.id === w.activeScene ? sceneInfo(s, w, c, m.role === 'gm') : { id: c.id, name: c.name }), terrain: [], objects: [], enemies: [], revealed: [] })),
   };
   if (m.role === 'gm' || !w.fogEnabled) return out;
   const own = s.tokens.filter(t => t.ownerId === m.id), known = new Set([...w.revealed, ...own.map(t => key(t.x, t.y))]);
