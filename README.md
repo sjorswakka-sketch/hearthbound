@@ -4,6 +4,16 @@ Hearthbound is a shared visual fantasy tabletop. A human Game Master guides an a
 
 The accompanying **BUILD_PROMPT.md** describes the complete product vision. This prototype implements its first foundation; it is not yet a complete D&D rules engine.
 
+## Windows testing and updates
+
+Download **Hearthbound-Windows-test.zip** from [Releases](https://github.com/sjorswakka-sketch/hearthbound/releases), extract the entire archive, and double-click **START-HEARTHBOUND.cmd**. Install Node.js 24 first; the launcher explains where to get it if it is missing. The first start downloads dependencies and prepares the local app. Keep its window open while playing.
+
+For the next update, stop the old window, download the new release, and extract it into a new folder. Local campaign data stays in `%LOCALAPPDATA%/Hearthbound`, and browser access is preserved by using the same `http://127.0.0.1:8787` address.
+
+Read [TESTING-WINDOWS.md](TESTING-WINDOWS.md) for the complete tester guide. This is a source-based test build, not a standalone EXE. New pushes to `main` produce a Windows test artifact after checks pass; version tags produce a downloadable release.
+
+The repository is private. Invite testers through [repository access settings](https://github.com/sjorswakka-sketch/hearthbound/settings/access), or share the downloaded ZIP directly. Receiving this ZIP does not grant access to the hosted Site. Separate local installs do not share a database: a multiplayer group must connect to the same hosted server, with access arranged for every player.
+
 ## Start a session
 
 1. Open the application and create a table as the GM.
@@ -44,5 +54,5 @@ Session access is retained in the browser. Switch table preserves this browser's
 
 Use **BUILD_PROMPT.md** for the next milestones and acceptance tests. Priority additions are durable account recovery, richer character sheets, complete combat and spells, privacy-aware fog of war, a map editor, and optional AI assistance.
 
-The source is prepared for GitHub-based development. No repository has been created in your GitHub account. Deployment status and the application link are supplied separately when verified.
+The source is maintained in [sjorswakka-sketch/hearthbound](https://github.com/sjorswakka-sketch/hearthbound). Windows test builds and hosted Site deployments are separate: pushing to GitHub creates test builds; it does not automatically redeploy the hosted app.
 

@@ -1,0 +1,94 @@
+name: Windows test package
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  windows:
+    name: Verify and package on Windows
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_CF_FETCH_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Test first-run installation, build, and database setup
+        env:
+          HEARTHBOUND_DATA_DIR: ${{ runner.temp }}\hearthbound-test-data
+        run: node scripts/windows/start.mjs --prepare-only
+      - name: Check TypeScript
+        run: node node_modules/typescript/bin/tsc --noEmit
+      - name: Test rules, API permissions, concurrency, and launcher
+        run: node --test --experimental-strip-types tests/game.test.ts tests/game-api.test.ts tests/windows-launcher.test.mjs
+      - name: Verify reopening preserves the database
+        env:
+          HEARTHBOUND_DATA_DIR: ${{ runner.temp }}\hearthbound-test-data
+        run: node scripts/windows/start.mjs --prepare-only
+      - name: Package tested source
+        run: node scripts/package-windows.mjs
+      - name: Upload Windows testing download
+        uses: actions/upload-artifact@v7
+        with:
+          name: Hearthbound-Windows-test
+          path: |
+            outputs/Hearthbound-Windows-test.zip
+            outputs/Hearthbound-Windows-test.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish tagged Windows test release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: Hearthbound-Windows-test
+          path: release-files
+      - name: Publish tested download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          cat > release-notes.md <<'EOF'
+          Download **Hearthbound-Windows-test.zip**, extract it fully, and double-click **START-HEARTHBOUND.cmd**.
+
+          **Requires Node.js 24 and internet for the first setup.** This is a source-based Windows test package, not a standalone EXE. The first launch installs dependencies and builds the app. It opens at http://127.0.0.1:8787.
+
+          Update by stopping the old version and extracting the new ZIP into a new folder. Local campaigns stay in `%LOCALAPPDATA%\Hearthbound`. Keep the same browser and URL to retain your GM/player identity.
+
+          Separate local installations have separate worlds. To play together, everyone must open the same server URL and use the same table code. The hosted app's sharing permissions are separate from GitHub access.
+
+          See **TESTING-WINDOWS.md** in the ZIP for the full guide.
+          EOF
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-files/* --repo "$GH_REPO" --clobber
+          else
+            gh release create "$RELEASE_TAG" release-files/* --repo "$GH_REPO" --verify-tag --title "Hearthbound $RELEASE_TAG — Windows test" --notes-file release-notes.md
+          fi
