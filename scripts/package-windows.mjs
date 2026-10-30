@@ -12,7 +12,7 @@ const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8'
 // credentials and generated builds cannot accidentally enter through ignored files.
 const commit = git('rev-parse', '--verify', 'HEAD^{commit}');
 const files = git('ls-tree', '-r', '--name-only', commit).split('\n');
-for (const required of ['START-HEARTHBOUND.cmd', 'scripts/windows/start.mjs', 'TESTING-WINDOWS.md', 'package-lock.json', '.openai/hosting.json']) {
+for (const required of ['START-HEARTHBOUND.cmd', 'START-LAN-GAME.cmd', 'scripts/windows/start.mjs', 'scripts/windows/launcher-utils.mjs', 'scripts/run-tests.mjs', 'TESTING-WINDOWS.md', 'package-lock.json', '.openai/hosting.json']) {
   if (!files.includes(required)) throw new Error(`Commit ${required} before creating a Windows release package.`);
 }
 const forbidden = files.filter(file => /(^|\/)(node_modules|\.git|\.wrangler|\.sites-runtime|\.vinext|outputs|work)(\/|$)/.test(file) || /(^|\/)(\.env[^/]*|\.dev\.vars[^/]*|[^/]*\.pem)$/.test(file));

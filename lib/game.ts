@@ -95,8 +95,9 @@ export function addPlayer(state: GameState, member: Member, characterClass: unkn
   const sheet=makeSheet(characterClass,state.ruleSetId!);
   const stats = state.ruleSetId==='prototype'&&CLASSES[characterClass as CharacterClass] ? CLASSES[characterClass as CharacterClass]! : derivedStats(characterClass,sheet);
   const slots = [[2, 10], [3, 10], [2, 11], [3, 11], [4, 10], [4, 11], [2, 9], [3, 9], [4, 9]];
-  const slot = slots.find(([x, y]) => !state.tokens.some(t => t.x === x && t.y === y));
-  if (!slot) throw new GameError("The arrival area is full. Ask the GM to move a character.", 409);
+  const candidates = [...slots, ...Array.from({length: state.height}, (_, y) => Array.from({length: state.width}, (_, x) => [x, y])).flat()];
+  const slot = candidates.find(([x, y]) => state.terrain[y]?.[x] === '.' && !state.tokens.some(t => t.x === x && t.y === y) && !state.objects.some(o => o.x === x && o.y === y && (o.type === 'chest' || !o.open)));
+  if (!slot) throw new GameError("This scene has no safe arrival space. Ask the GM to make room.", 409);
   member.characterId = crypto.randomUUID();
   state.members.push(member);
   state.tokens.push({ id: member.characterId, name: member.name, kind: "hero", characterClass, maxHp: stats.hp, ...stats, speed: 30, x: slot[0], y: slot[1], ownerId: member.id, sheet, turn:newTurn() });
@@ -156,12 +157,35 @@ function beginTurn(state: GameState) {
   state.combat.remainingMovement = current ? Math.min(effectiveSpeed(state,current), state.rules.movementLimit) : 0;
   state.combat.actionUsed = false;
 }
+function advanceTurn(state: GameState) {
+  if (!state.combat.active) throw new GameError("Combat has not started.");
+  if (state.tokens.filter(t => !t.sheet?.deathSaves.dead && (t.hp > 0 || t.kind === 'hero')).length < 2) throw new GameError("Only one living character remains. Ask the GM to end combat.");
+  for (let n = 0; n < state.combat.order.length; n++) {
+    state.combat.turnIndex = (state.combat.turnIndex + 1) % state.combat.order.length;
+    if (state.combat.turnIndex === 0) state.combat.round++;
+    const candidate = state.tokens.find(t => t.id === state.combat.order[state.combat.turnIndex]);
+    if (candidate && !candidate.sheet?.deathSaves.dead && (candidate.hp > 0 || candidate.kind === 'hero')) break;
+  }
+  beginTurn(state);
+  const current = state.tokens.find(t => t.id === state.combat.order[state.combat.turnIndex]);
+  log(state, "combat", `Round ${state.combat.round}: ${current?.name}'s turn.`);
+}
 export function applyAction(state: GameState, member: Member, action: Action): void {
   normalizeState(state);
   if (typeof action.id !== "string" || action.id.length < 8 || action.id.length > 100) throw new GameError("A valid action ID is required.");
   if (state.processed?.some(a => a.id === action.id && a.memberId === member.id)) return;
   if(applyExpandedAction(state,member,action,{die,log,fail:(message:string,status=400):never=>{throw new GameError(message,status);},requireGm,requireTurn,controlledToken})){state.processed=[...(state.processed??[]),{id:action.id,memberId:member.id}].slice(-160);return;}
   switch (action.type) {
+    case "endTurn": {
+      if (!state.combat.active) throw new GameError("Combat has not started.");
+      const token = state.tokens.find(t => t.id === action.tokenId);
+      if (!token) throw new GameError("Character not found.", 404);
+      if (member.role !== 'gm' && token.ownerId !== member.id) throw new GameError("You can only end your own character's turn.", 403);
+      requireTurn(state, token);
+      if (member.role !== 'gm' && token.hp === 0 && !token.sheet!.deathSaves.dead && !token.sheet!.deathSaves.stable && !token.turn!.deathSaveRolled) throw new GameError("Make your death saving throw before ending your turn.");
+      advanceTurn(state);
+      break;
+    }
     case "move": {
       const token = controlledToken(state, member, action.tokenId); requireTurn(state, token);
       const x = integer(action.x, 0, state.width - 1, "destination"), y = integer(action.y, 0, state.height - 1, "destination");
@@ -263,16 +287,7 @@ export function applyAction(state: GameState, member: Member, action: Action): v
         state.combat = { active: true, round: 1, order: initiative.map(t => t.id), turnIndex: 0, remainingMovement: 0, actionUsed: false };
         beginTurn(state); log(state, "combat", `Initiative: ${initiative.map(t => `${state.tokens.find(p => p.id === t.id)?.name} ${t.value}`).join(" · ")}.`);
       } else if (action.mode === "next") {
-        if (!state.combat.active) throw new GameError("Combat has not started.");
-        if (state.tokens.filter(t => !t.sheet?.deathSaves.dead&&(t.hp>0||t.kind==='hero')).length < 2) throw new GameError("Only one living character remains. End combat.");
-        for (let n = 0; n < state.combat.order.length; n++) {
-          state.combat.turnIndex = (state.combat.turnIndex + 1) % state.combat.order.length;
-          if (state.combat.turnIndex === 0) state.combat.round++;
-          const candidate=state.tokens.find(t => t.id === state.combat.order[state.combat.turnIndex]);
-          if (candidate&&!candidate.sheet?.deathSaves.dead&&(candidate.hp>0||candidate.kind==='hero')) break;
-        }
-        beginTurn(state); const current = state.tokens.find(t => t.id === state.combat.order[state.combat.turnIndex]);
-        log(state, "combat", `Round ${state.combat.round}: ${current?.name}'s turn.`);
+        advanceTurn(state);
       } else if (action.mode === "end") {
         if (!state.combat.active) throw new GameError("Combat has not started.");
         state.combat = { active: false, round: 0, order: [], turnIndex: 0, remainingMovement: 0, actionUsed: false };

@@ -37,14 +37,27 @@ jobs:
         run: node scripts/windows/start.mjs --prepare-only
       - name: Check TypeScript
         run: node node_modules/typescript/bin/tsc --noEmit
-      - name: Test rules, API permissions, concurrency, and launcher
-        run: node --test --experimental-strip-types tests/game.test.ts tests/game-api.test.ts tests/rules-engine.test.ts tests/rules-library.test.mjs tests/world-session.test.ts tests/windows-launcher.test.mjs
+      - name: Test all rules, spells, sessions, permissions, and launchers
+        run: npm test
       - name: Verify reopening preserves the database
         env:
           HEARTHBOUND_DATA_DIR: ${{ runner.temp }}\hearthbound-test-data
         run: node scripts/windows/start.mjs --prepare-only
       - name: Package tested source
         run: node scripts/package-windows.mjs
+      - name: Verify extracted Windows package and LAN launcher
+        shell: pwsh
+        run: |
+          $packageCheckPath = Join-Path $env:RUNNER_TEMP 'hearthbound-package-check'
+          Expand-Archive -LiteralPath 'outputs/Hearthbound-Windows-test.zip' -DestinationPath $packageCheckPath
+          $packageRootPath = Join-Path $packageCheckPath 'Hearthbound'
+          foreach ($requiredFile in @('START-HEARTHBOUND.cmd', 'START-LAN-GAME.cmd', 'scripts/windows/start.mjs', 'scripts/windows/launcher-utils.mjs', 'scripts/run-tests.mjs', 'TESTING-WINDOWS.md', 'package-lock.json')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $packageRootPath $requiredFile) -PathType Leaf)) {
+              throw "The extracted Windows package is missing $requiredFile."
+            }
+          }
+          node --test (Join-Path $packageRootPath 'tests/windows-launcher.test.mjs')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows testing download
         uses: actions/upload-artifact@v7
         with:
@@ -83,7 +96,7 @@ jobs:
 
           Update by stopping the old version and extracting the new ZIP into a new folder. Local campaigns stay in `%LOCALAPPDATA%\Hearthbound`. Keep the same browser and URL to retain your GM/player identity.
 
-          Separate local installations have separate worlds. To play together, everyone must open the same server URL and use the same table code. The hosted app's sharing permissions are separate from GitHub access.
+          To play together on the same home network, the host uses **START-LAN-GAME.cmd** and shares the displayed address. Friends open that address in their browsers, enter the same table code, and use the GM's invitation if required. Only the host needs the download. Separate local installations have separate worlds.
 
           See **TESTING-WINDOWS.md** in the ZIP for the full guide.
           EOF

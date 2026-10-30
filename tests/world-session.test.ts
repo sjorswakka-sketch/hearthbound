@@ -13,6 +13,8 @@ registerHooks({ resolve(specifier, context, next) {
 const { createInitialState, addPlayer } = await import('../lib/game.ts');
 // @ts-ignore native Node TypeScript imports for tests.
 const { applyWorldAction, applyVisibleAction, visibleState, guardVisibility, worldData } = await import('../lib/world.ts');
+// @ts-ignore native Node TypeScript imports for tests.
+const { SCENE_THEMES, sceneLayout, sceneTemplate } = await import('../lib/scenes.ts');
 const gm: Member = { id: 'gm-world', name: 'GM', role: 'gm', tokenHash: 'secret-gm-token-hash' };
 const action = (op: string, fields: Record<string, unknown> = {}): Action => ({ id: crypto.randomUUID(), type: 'world', op, ...fields });
 const world = (state: GameState) => (state as GameState & { world: WorldData }).world;
@@ -204,4 +206,122 @@ test('world edits and scene placement reserve safe spaces for downed characters'
   const moved = state.tokens.filter(token => token.kind === 'hero');
   assert.equal(new Set(moved.map(token => `${token.x},${token.y}`)).size, moved.length);
   for (const hero of moved) assert.equal(state.terrain[hero.y][hero.x], '.');
+});
+
+test('six authored templates have connected floor plans and valid encounter placements', () => {
+  const signatures = new Set<string>();
+  for (const theme of SCENE_THEMES) {
+    const layout = sceneLayout(theme);
+    signatures.add(layout.terrain.join(''));
+    assert.equal(layout.terrain.length, 14);
+    assert.ok(layout.terrain.every(row => row.length === 20));
+    assert.ok(layout.terrain[0].split('').every(tile => tile === '#'));
+    assert.ok(layout.terrain[13].split('').every(tile => tile === '#'));
+    assert.ok(layout.terrain.every(row => row.startsWith('#') && row.endsWith('#')));
+    const placements = [...layout.objects, ...layout.enemies];
+    assert.equal(new Set(placements.map(item => `${item.x},${item.y}`)).size, placements.length);
+    for (const item of placements) assert.equal(layout.terrain[item.y][item.x], '.');
+    const visited = new Set(['1,1']), queue = [{ x: 1, y: 1 }];
+    for (let index = 0; index < queue.length; index++) {
+      const current = queue[index];
+      for (const [dx, dy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+        const x = current.x + dx, y = current.y + dy, cell = `${x},${y}`;
+        if (layout.terrain[y]?.[x] === '.' && !visited.has(cell)) { visited.add(cell); queue.push({ x, y }); }
+      }
+    }
+    assert.equal(visited.size, layout.terrain.reduce((total, row) => total + [...row].filter(tile => tile === '.').length, 0), `${theme} has no permanently inaccessible floor islands`);
+    assert.ok(sceneTemplate(theme).narration.length > 70);
+  }
+  assert.equal(signatures.size, 6, 'each template has a different floor plan');
+});
+
+test('each scene retains its introduction and atmosphere, including later GM narration', () => {
+  const state = createInitialState('SCENESTORY', gm, 'srd-5.2.1');
+  const initialTerrain = [...state.terrain];
+  applyWorldAction(state, gm, action('sceneUpdate', { name: 'Storm Harbor', theme: 'harbor', ambience: 'Storm · High tide', narration: 'A storm is coming.' }));
+  applyWorldAction(state, gm, action('sceneCreate', { name: 'Warm Inn', preset: 'tavern' }));
+  const innId = worldData(state).activeScene;
+  assert.equal(state.narrative, sceneTemplate('tavern').narration);
+  assert.equal(world(visibleState(state, gm)).currentScene?.theme, 'tavern');
+  applyVisibleAction(state, gm, { id: crypto.randomUUID(), type: 'opening', text: 'The innkeeper reveals a new clue.' });
+  applyWorldAction(state, gm, action('sceneSwitch', { sceneId: 'harbor' }));
+  assert.equal(state.title, 'Storm Harbor');
+  assert.equal(state.narrative, 'A storm is coming.');
+  assert.deepEqual(state.terrain, initialTerrain);
+  assert.equal(world(visibleState(state, gm)).currentScene?.ambience, 'Storm · High tide');
+  applyWorldAction(state, gm, action('sceneSwitch', { sceneId: innId }));
+  assert.equal(state.narrative, 'The innkeeper reveals a new clue.');
+  state.combat.active = true;
+  applyWorldAction(state, gm, action('sceneUpdate', { theme: 'crypt', narration: 'The candles go out.' }));
+  assert.equal(state.narrative, 'The candles go out.', 'narration can change during an encounter without changing terrain');
+});
+
+test('scene metadata validation is atomic and inactive scene narration is private', () => {
+  const state = createInitialState('SCENESECRET', gm, 'srd-5.2.1');
+  const player: Member = { id: 'scene-player', name: 'Mira', role: 'player' };
+  addPlayer(state, player, 'rogue');
+  applyWorldAction(state, gm, action('sceneCreate', { name: 'Secret Temple', preset: 'ruins' }));
+  applyWorldAction(state, gm, action('sceneUpdate', { narration: 'Secret reveal: a sleeping dragon.' }));
+  applyWorldAction(state, gm, action('sceneSwitch', { sceneId: 'harbor' }));
+  const before = structuredClone(state);
+  assert.throws(() => applyWorldAction(state, gm, action('sceneUpdate', { name: 'Should not change', theme: 'invalid' })), /supported scene theme/);
+  assert.deepEqual(state, before);
+  assert.throws(() => applyWorldAction(state, player, action('sceneUpdate', { narration: 'Player overwrite' })), /Only the GM/);
+  assert.ok(!JSON.stringify(visibleState(state, player)).includes('sleeping dragon'));
+  worldData(state).fogEnabled = true;
+  const output = JSON.stringify(visibleState(state, player));
+  assert.ok(!output.includes('sleeping dragon'));
+  assert.ok(!world(visibleState(state, player)).scenes.some(scene => scene.name === 'Secret Temple'));
+});
+
+test('GM reveal brushes clip to the board, hide areas, and never accept invalid radii', () => {
+  const state = createInitialState('BRUSHWORLD', gm, 'srd-5.2.1');
+  applyWorldAction(state, gm, action('reveal', { x: 0, y: 0, radius: 2, revealed: true }));
+  assert.equal(worldData(state).revealed.length, 9);
+  assert.ok(worldData(state).revealed.includes('2,2'));
+  const before = [...worldData(state).revealed];
+  assert.throws(() => applyWorldAction(state, gm, action('reveal', { x: 0, y: 0, radius: 999, revealed: true })), /valid map value/);
+  assert.deepEqual(worldData(state).revealed, before);
+  applyWorldAction(state, gm, action('reveal', { x: 1, y: 1, radius: 1, revealed: false }));
+  assert.equal(worldData(state).revealed.length, 0);
+  applyWorldAction(state, gm, action('revealAll', { revealed: true }));
+  assert.equal(worldData(state).revealed.length, state.width * state.height);
+  applyWorldAction(state, gm, action('revealAll', { revealed: false }));
+  assert.deepEqual(worldData(state).revealed, []);
+});
+
+test('shared pings expire, respect hidden areas, deduplicate and leave resources untouched', () => {
+  const { state, player, hero } = fogMovementFixture();
+  const before = structuredClone({ combat: state.combat, sheet: hero.sheet, turn: hero.turn });
+  const command = action('ping', { x: hero.x, y: hero.y });
+  applyWorldAction(state, player, command);
+  applyWorldAction(state, player, command);
+  assert.equal(worldData(state).pings?.length, 1);
+  assert.equal(world(visibleState(state, player)).pings?.[0].memberId, player.id);
+  assert.throws(() => applyWorldAction(state, player, action('ping', { x: 3, y: 1 })), /revealed square/);
+  assert.throws(() => applyWorldAction(state, player, action('ping', { x: hero.x, y: hero.y })), (error: unknown) => (error as { status: number }).status === 429);
+  applyWorldAction(state, gm, action('ping', { x: 3, y: 1 }));
+  assert.equal(world(visibleState(state, gm)).pings?.length, 2);
+  assert.equal(world(visibleState(state, player)).pings?.length, 1, 'hidden GM pings do not reveal coordinates');
+  for (const ping of worldData(state).pings ?? []) ping.expiresAt = Date.now() - 1;
+  assert.deepEqual(world(visibleState(state, gm)).pings, []);
+  assert.deepEqual({ combat: state.combat, sheet: hero.sheet, turn: hero.turn }, before);
+});
+
+test('spell fog guards prevent hidden targets, trajectories, origins and area probes', () => {
+  const { state, player, hero } = fogMovementFixture();
+  const enemy = { ...structuredClone(hero), id: 'spell-target', ownerId: undefined, kind: 'enemy' as const, x: 3, y: 1 };
+  state.tokens.push(enemy);
+  const targeted: Action = { id: crypto.randomUUID(), type: 'spell', tokenId: hero.id, spellId: 'fire-bolt', targetIds: [enemy.id] };
+  assert.throws(() => guardVisibility(state, player, targeted), /visible spell targets/);
+  worldData(state).revealed = ['3,1'];
+  assert.throws(() => guardVisibility(state, player, targeted), /reveal the line of sight/);
+  worldData(state).revealed.push('2,1');
+  assert.doesNotThrow(() => guardVisibility(state, player, targeted));
+  const area: Action = { id: crypto.randomUUID(), type: 'spell', tokenId: hero.id, spellId: 'fireball', origin: { x: 3, y: 1 } };
+  assert.throws(() => guardVisibility(state, player, area), /entire spell area/);
+  assert.throws(() => guardVisibility(state, player, { ...area, origin: { x: 4, y: 4 } }), /revealed spell origin/);
+  applyWorldAction(state, gm, action('revealAll', { revealed: true }));
+  assert.doesNotThrow(() => guardVisibility(state, player, area));
+  assert.doesNotThrow(() => guardVisibility(state, gm, area));
 });

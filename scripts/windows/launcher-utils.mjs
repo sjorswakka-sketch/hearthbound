@@ -28,6 +28,7 @@ export function localWorkerConfig(built, buildDirectory, projectRoot) {
   }
   return {
     ...built,
+    vars: {...built.vars, HEARTHBOUND_LOCAL_MODE: 'true'},
     main: path.resolve(buildDirectory, built.main),
     assets: built.assets ? {...built.assets, directory: path.resolve(buildDirectory, built.assets.directory)} : undefined,
     d1_databases: built.d1_databases.map(db => db.binding === 'DB' ? {
@@ -40,8 +41,15 @@ export function localWorkerConfig(built, buildDirectory, projectRoot) {
 }
 
 export function parseOptions(args) {
-  const allowed = new Set(['--prepare-only', '--no-browser']);
+  const allowed = new Set(['--prepare-only', '--no-browser', '--lan']);
   const unsupported = args.find(arg => !allowed.has(arg));
-  if (unsupported) throw new Error(`Unknown option: ${unsupported}. Supported options: --prepare-only, --no-browser.`);
-  return {prepareOnly: args.includes('--prepare-only'), noBrowser: args.includes('--no-browser')};
+  if (unsupported) throw new Error(`Unknown option: ${unsupported}. Supported options: --prepare-only, --no-browser, --lan.`);
+  return {prepareOnly: args.includes('--prepare-only'), noBrowser: args.includes('--no-browser'), lan: args.includes('--lan')};
+}
+
+export function lanAddresses(interfaces) {
+  return [...new Set(Object.values(interfaces).flatMap(entries => entries || []).filter(item =>
+    !item.internal && (item.family === 'IPv4' || item.family === 4) &&
+    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(item.address)
+  ).map(item => item.address))].sort();
 }

@@ -1,5 +1,7 @@
 // @ts-ignore Native Node test imports.
 import { ABILITIES, SKILLS, CONDITIONS, CLASS_PROFILES, makeSheet, derivedStats, modifier, newTurn } from './characters.ts';
+// @ts-ignore Native Node test imports.
+import { applyAutomatedSpell, spellDefinition, type SpellRuntime } from './spells.ts';
 import type { Ability, Abilities, CharacterClass } from './characters';
 import type { Action, GameState, Member, Token } from './game';
 type DiceLog={die:(sides:number)=>number;log:(state:GameState,kind:string,text:string)=>void};
@@ -30,10 +32,11 @@ export function spendMovement(state:GameState,token:Token,distance:number){
  token.turn!.movementSpent+=distance;state.combat.remainingMovement-=distance;
 }
 export function rollD20(die:(n:number)=>number,mode=0){const a=die(20);if(!mode)return a;const b=die(20);return mode>0?Math.max(a,b):Math.min(a,b);}
-export function attackAdvantage(state:GameState,actor:Token,target:Token){
+export function attackAdvantage(state:GameState,actor:Token,target:Token,ranged=false){
  const a=actor.sheet!,b=target.sheet!; const close=Math.max(Math.abs(actor.x-target.x),Math.abs(actor.y-target.y))<=1;
  const advantage=a.conditions.includes('invisible')||b.conditions.some(c=>['blinded','paralyzed','restrained','stunned','unconscious'].includes(c))||(b.conditions.includes('prone')&&close);
- const disadvantage=a.conditions.some(c=>['blinded','poisoned','prone','restrained'].includes(c))||b.conditions.includes('invisible')||(b.conditions.includes('prone')&&!close)||(!!target.turn?.dodging&&!incapacitated(target)&&effectiveSpeed(state,target)>0&&!b.conditions.includes('blinded')&&!a.conditions.includes('invisible'))||(state.ruleSetId!=='srd-5.2.1'&&a.exhaustion>=3);
+ const threatened=ranged&&state.tokens.some(t=>t.kind!==actor.kind&&t.hp>0&&!incapacitated(t)&&!t.sheet!.conditions.includes('blinded')&&!a.conditions.includes('invisible')&&Math.max(Math.abs(t.x-actor.x),Math.abs(t.y-actor.y))<=1);
+ const disadvantage=threatened||a.conditions.some(c=>['blinded','poisoned','prone','restrained'].includes(c))||b.conditions.includes('invisible')||(b.conditions.includes('prone')&&!close)||(!!target.turn?.dodging&&!incapacitated(target)&&effectiveSpeed(state,target)>0&&!b.conditions.includes('blinded')&&!a.conditions.includes('invisible'))||(state.ruleSetId!=='srd-5.2.1'&&a.exhaustion>=3);
  return advantage===disadvantage?0:advantage?1:-1;
 }
 export function saveModifier(state:GameState,token:Token,ability:Ability){const s=token.sheet!;return modifier(s.abilities[ability])+(s.saveProficiencies.includes(ability)?s.proficiency:0)-(state.ruleSetId==='srd-5.2.1'?2*s.exhaustion:0);}
@@ -70,6 +73,18 @@ function spendAction(state:GameState,token:Token,kind:string){if(!state.combat.a
 
 export function applyExpandedAction(state:GameState,member:Member,action:Action,h:Helpers):boolean{
  switch(action.type){
+ case 'spellPrepare':{
+  h.requireGm(member);if(state.combat.active)h.fail('Approve spell preparation outside an encounter.');
+  const token=owned(state,member,action.tokenId,h),ids=action.spellIds;
+  if(!Array.isArray(ids)||ids.length>8||ids.some(id=>!spellDefinition(id)))h.fail('Choose supported spells for this character.');
+  const ability=(action.ability??token.sheet!.spellAbility) as Ability;if(!ABILITIES.includes(ability))h.fail('Choose the spellcasting ability approved by the GM.');
+  token.sheet!.preparedSpellIds=[...new Set(ids)] as string[];token.sheet!.spellAbility=ability;token.sheet!.spellSaveDC=8+token.sheet!.proficiency+modifier(token.sheet!.abilities[ability]);token.sheet!.spellAttack=token.sheet!.proficiency+modifier(token.sheet!.abilities[ability]);
+  h.log(state,'sheet',`GM approved ${token.name}'s automated spell list and ${ability.toUpperCase()} casting ability. The GM verifies class/origin access and preparation limits.`);return true;
+ }
+ case 'spell':{
+  const runtime:SpellRuntime={...h,spend:(s,m,a)=>{applyExpandedAction(s,m,a,{...h,log:()=>{}});},hitPoints:(s,t,amount,critical)=>changeHitPoints(s,t,amount,h,critical),saveModifier,attackMode:attackAdvantage,incapacitated,speed:effectiveSpeed,rollD20:mode=>rollD20(h.die,mode)};
+  applyAutomatedSpell(state,member,action,runtime);return true;
+ }
  case 'character':{
   const token=owned(state,member,action.tokenId,h);
   const mechanical=action.level!==undefined||action.abilities!==undefined||action.skills!==undefined;
@@ -77,7 +92,8 @@ export function applyExpandedAction(state:GameState,member:Member,action:Action,
   if(mechanical){h.requireGm(member);const level=number(action.level??token.sheet!.level,1,20,h);let abilities={...token.sheet!.abilities};
    if(action.abilities!==undefined){if(!action.abilities||typeof action.abilities!=='object')h.fail('Supply all six ability scores.');abilities=Object.fromEntries(ABILITIES.map(a=>[a,number((action.abilities as Abilities)[a],3,30,h)])) as Abilities;}
    const rebuilt=makeSheet(token.characterClass,state.ruleSetId!,level,abilities),previous=token.sheet!;
-   rebuilt.notes=previous.notes;rebuilt.inventory=previous.inventory;
+   rebuilt.notes=previous.notes;rebuilt.inventory=previous.inventory;rebuilt.preparedSpellIds=previous.preparedSpellIds?[...previous.preparedSpellIds]:undefined;
+   if(previous.preparedSpellIds&&previous.spellAbility){rebuilt.spellAbility=previous.spellAbility;rebuilt.spellSaveDC=8+rebuilt.proficiency+modifier(rebuilt.abilities[previous.spellAbility]);rebuilt.spellAttack=rebuilt.proficiency+modifier(rebuilt.abilities[previous.spellAbility]);}
    if(action.skills!==undefined){if(!Array.isArray(action.skills)||action.skills.some(s=>typeof s!=='string'||!Object.hasOwn(SKILLS,s)))h.fail('Choose valid skills.');rebuilt.skills=[...new Set(action.skills)] as string[];}
    token.sheet=rebuilt;Object.assign(token,derivedStats(token.characterClass,rebuilt));
    h.log(state,'system',`GM rebuilt ${token.name}'s level ${level} sheet; resources reset. Confirm origin bonuses, features and equipment in the SRD.`);

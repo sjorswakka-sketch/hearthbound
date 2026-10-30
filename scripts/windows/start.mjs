@@ -1,16 +1,16 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { configureToolEnvironment } from '../tool-environment.mjs';
-import { dataDirectory, dependencyFingerprint, localWorkerConfig, parseOptions, requireNodeVersion } from './launcher-utils.mjs';
+import { dataDirectory, dependencyFingerprint, localWorkerConfig, parseOptions, requireNodeVersion, lanAddresses } from './launcher-utils.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const environmentImport = new URL('../sites-env.mjs', import.meta.url).href;
 process.chdir(root);
-const url = 'http://127.0.0.1:8787';
+let url = 'http://127.0.0.1:8787';
 
 function runNode(args) {
   const result = spawnSync(process.execPath, args, {cwd: root, env: process.env, stdio: 'inherit', windowsHide: true});
@@ -18,18 +18,22 @@ function runNode(args) {
   if (result.status !== 0) throw new Error(`Setup stopped (exit ${result.status ?? 'unknown'}). Your saved campaigns have not been deleted.`);
 }
 
-async function portAvailable() {
+async function portAvailable(ip) {
   await new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.once('error', () => reject(new Error(`Port 8787 is already in use. Close the other Hearthbound window, then try again. Existing app: ${url}`)));
-    probe.listen(8787, '127.0.0.1', () => probe.close(resolve));
+    probe.listen(8787, ip, () => probe.close(resolve));
   });
 }
 
 async function main() {
   requireNodeVersion(process.versions.node);
   const options = parseOptions(process.argv.slice(2));
-  if (!options.prepareOnly) await portAvailable();
+  const listenIp = options.lan ? '0.0.0.0' : '127.0.0.1';
+  const addresses = options.lan ? lanAddresses(networkInterfaces()) : [];
+  if (options.lan && !options.prepareOnly && !addresses.length) throw new Error('No home-network address found. Connect to your Wi-Fi or Ethernet, or use START-HEARTHBOUND.cmd for solo testing.');
+  if (addresses.length) url = `http://${addresses[0]}:8787`;
+  if (!options.prepareOnly) await portAvailable(listenIp);
   const savedData = dataDirectory(process.env, process.platform, homedir());
   mkdirSync(savedData, {recursive: true});
   configureToolEnvironment(root);
@@ -73,8 +77,13 @@ async function main() {
   finally { if (previousCI === undefined) delete process.env.CI; else process.env.CI = previousCI; }
   if (options.prepareOnly) { console.log('\nSetup verified. Run START-HEARTHBOUND.cmd to play.'); return; }
   console.log(`\nOpening Hearthbound at ${url}`);
-  console.log('For multiplayer, all players must use the SAME hosted server URL. This local copy is an independent test world.\n');
-  const child = spawn(process.execPath, ['--import', environmentImport, wrangler, 'dev', ...bindingArgs, '--ip', '127.0.0.1', '--port', '8787', '--inspector-port', '0'], {
+  if (options.lan) {
+    console.log('LAN game: keep this host running. Friends on the same trusted home network open one of these addresses:');
+    for (const address of addresses) console.log(`  http://${address}:8787`);
+    console.log('Create a table, then share its invitation from the Session tab. Other players do not need to install the game.');
+    console.log('If Windows asks about network access, use your private home-network profile. No router changes are needed.\n');
+  } else console.log('Solo test mode. Use START-LAN-GAME.cmd to host one shared world for friends on the same home network.\n');
+  const child = spawn(process.execPath, ['--import', environmentImport, wrangler, 'dev', ...bindingArgs, '--ip', listenIp, '--port', '8787', '--inspector-port', '0'], {
     cwd: root, env: process.env, stdio: 'inherit', windowsHide: true,
   });
   let stopped = false;

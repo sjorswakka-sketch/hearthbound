@@ -1,11 +1,12 @@
 {
   "name": "site-creator-vinext-starter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
+    "test": "node scripts/run-tests.mjs",
     "install:ci": "node scripts/install-ci.mjs",
     "dev": "node scripts/run-framework.mjs dev",
     "build": "node scripts/run-framework.mjs build",

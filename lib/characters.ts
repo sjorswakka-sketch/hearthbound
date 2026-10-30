@@ -49,7 +49,7 @@ export type CharacterSheet={
  inventory:{name:string;quantity:number}[];spellSlots:number[];maxSpellSlots:number[];
  pactSlotLevel:number;pactSlots:number;maxPactSlots:number;hitDice:number;hitDie:number;
  conditions:string[];exhaustion:number;deathSaves:{successes:number;failures:number;stable:boolean;dead:boolean};
- concentration?:string;notes:string;weapon:string;damageModifier:number;spellAbility?:Ability;spellSaveDC?:number;spellAttack?:number;
+ concentration?:string;notes:string;weapon:string;damageModifier:number;spellAbility?:Ability;spellSaveDC?:number;spellAttack?:number;preparedSpellIds?:string[];
 };
 export type TurnResources={bonusUsed:boolean;reactionUsed:boolean;slotSpent:boolean;bonusSpellCast:boolean;nonCantripCast:boolean;otherSpellCast:boolean;dodging:boolean;disengaged:boolean;helping:boolean;ready:boolean;deathSaveRolled:boolean;attacksMade:number;movementSpent?:number;dashes?:number};
 export function newTurn():TurnResources{return {bonusUsed:false,reactionUsed:false,slotSpent:false,bonusSpellCast:false,nonCantripCast:false,otherSpellCast:false,dodging:false,disengaged:false,helping:false,ready:false,deathSaveRolled:false,attacksMade:0,movementSpent:0,dashes:0};}

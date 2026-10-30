@@ -2,11 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import type { GameState, Member } from "../lib/game";
+import type { SessionState } from '../lib/session';
 
 // Exercise the real route, replacing only Cloudflare's unavailable local binding.
 // Each query yields like a remote D1 request, so parallel actions race on revisions.
 type Row = { code: string; revision: number; state_json: string };
-type ApiSnapshot = { room: string; token?: string; recoveryCode?: string; state: GameState; me: Member; error?: string };
+type ApiSnapshot = { room: string; token?: string; recoveryCode?: string; inviteCode?: string; state: SessionState; me: Member; error?: string };
 const rows = new Map<string, Row>();
 const binding = {
   prepare(sql: string) {
@@ -243,4 +244,126 @@ test('configured assistant returns a private draft with one mocked provider requ
   const snapshotText = JSON.stringify(await snapshot.json());
   assert.ok(!snapshotText.includes(env.OPENAI_API_KEY));
   assert.ok(!snapshotText.includes('Draft: violet lanterns'));
+});
+
+test('invited tables require the current invitation and keep hashes out of every snapshot', async () => {
+  const created = await post({ type: 'create', name: 'Inviting GM', requireInvite: true });
+  assert.equal(created.status, 201);
+  const { room, token, inviteCode } = created.body;
+  assert.match(inviteCode!, /^[a-f0-9]{64}$/);
+  assert.deepEqual(created.body.state.session, { locked: false, inviteRequired: true, inviteVersion: 1 });
+  assert.ok(!JSON.stringify(created.body.state).includes('inviteHash'));
+  assert.ok(!JSON.stringify(created.body.state).includes(inviteCode!));
+  assert.equal((await post({ type: 'join', room, name: 'No invitation' })).status, 403);
+  assert.equal((await post({ type: 'join', room, name: 'Wrong invitation', inviteCode: 'f'.repeat(64) })).status, 403);
+  const joined = await post({ type: 'join', room, name: 'Invited wizard', characterClass: 'wizard', inviteCode });
+  assert.equal(joined.status, 201);
+  assert.equal(joined.body.inviteCode, undefined);
+  assert.equal((await post({ type: 'invite', room }, joined.body.token)).status, 403);
+  const renewed = await post({ type: 'invite', room }, token);
+  assert.equal(renewed.status, 200);
+  assert.notEqual(renewed.body.inviteCode, inviteCode);
+  assert.equal(renewed.body.state.session!.inviteVersion, 2);
+  assert.equal((await post({ type: 'join', room, name: 'Stale invitation', inviteCode })).status, 403);
+  assert.equal((await post({ type: 'join', room, name: 'Current invitation', inviteCode: renewed.body.inviteCode })).status, 201);
+  const current = await GET(new Request(`http://localhost/api/game?room=${room}`, { headers: { Authorization: `Bearer ${token}` } }));
+  const currentBody = await current.json() as ApiSnapshot;
+  assert.equal(currentBody.inviteCode, undefined);
+  for (const key of ['inviteHash', 'tokenHash', 'accountHash', 'recoveryHash']) assert.ok(!JSON.stringify(currentBody).includes(key));
+  assert.ok(!JSON.stringify(currentBody).includes(renewed.body.inviteCode!));
+});
+
+test('locked tables reject new joins while existing players can recover and continue', async () => {
+  const created = await post({ type: 'create', name: 'Lock GM', requireInvite: true });
+  const { room, token, inviteCode } = created.body;
+  const player = await post({ type: 'join', room, name: 'Already seated', inviteCode });
+  const command = { type: 'action', room, action: action('session', { op: 'lock', locked: true }) };
+  assert.equal((await post(command, player.body.token)).status, 403);
+  assert.equal((await post(command, token)).status, 200);
+  const rotated = await post({ type: 'invite', room }, token);
+  assert.equal(rotated.body.state.session!.locked, true);
+  assert.equal((await post({ type: 'join', room, name: 'Latecomer', inviteCode: rotated.body.inviteCode })).status, 403);
+  const restored = await post({ type: 'recover', room, recoveryCode: player.body.recoveryCode });
+  assert.equal(restored.status, 200);
+  assert.equal(restored.body.me.id, player.body.me.id);
+  assert.equal((await post({ type: 'action', room, action: action('chat', { text: 'Still at this table.' }) }, restored.body.token)).status, 200);
+  assert.equal((await post({ type: 'action', room, action: action('session', { op: 'lock', locked: false }) }, token)).status, 200);
+  assert.equal((await post({ type: 'join', room, name: 'Now admitted', inviteCode: rotated.body.inviteCode })).status, 201);
+});
+
+test('removing a player revokes both credentials, closes new joins and preserves their hero', async () => {
+  const created = await post({ type: 'create', name: 'Removal GM' });
+  const { room, token } = created.body;
+  const removed = await post({ type: 'join', room, name: 'Departing bard', characterClass: 'bard' });
+  const remaining = await post({ type: 'join', room, name: 'Remaining rogue', characterClass: 'rogue' });
+  const hero = removed.body.state.tokens.find(t => t.id === removed.body.me.characterId)!;
+  const request = { type: 'action', room, action: action('session', { op: 'remove', memberId: removed.body.me.id }) };
+  assert.equal((await post(request, removed.body.token)).status, 403);
+  const outcomes = await Promise.all([post(request, token), post(request, token)]);
+  assert.ok(outcomes.every(result => result.status === 200));
+  const state = outcomes[0].body.state;
+  assert.equal(state.session!.locked, true);
+  assert.equal(state.members.some(m => m.id === removed.body.me.id), false);
+  const retained = state.tokens.find(t => t.id === hero.id)!;
+  assert.equal(retained.ownerId, undefined);
+  assert.equal(retained.hp, hero.hp);
+  assert.deepEqual(retained.sheet, hero.sheet);
+  assert.equal((await GET(new Request(`http://localhost/api/game?room=${room}`, { headers: { Authorization: `Bearer ${removed.body.token}` } }))).status, 403);
+  assert.equal((await post({ type: 'recover', room, recoveryCode: removed.body.recoveryCode })).status, 403);
+  assert.equal((await post({ type: 'join', room, name: 'New seat' })).status, 403);
+  assert.equal((await post({ type: 'action', room, action: action('chat', { text: 'The rest of us continue.' }) }, remaining.body.token)).status, 200);
+  assert.equal((await post({ type: 'action', room, action: action('session', { op: 'remove', memberId: created.body.me.id }) }, token)).status, 403);
+});
+
+test('the GM can transfer a hero and the server enforces its new owner immediately', async () => {
+  const created = await post({ type: 'create', name: 'Assignment GM' });
+  const { room, token } = created.body;
+  const player = await post({ type: 'join', room, name: 'New custodian', characterClass: 'wizard' });
+  const priorCharacter = player.body.me.characterId!;
+  const assigned = await post({ type: 'action', room, action: action('session', { op: 'assign', tokenId: 'companion-eira', memberId: player.body.me.id }) }, token);
+  assert.equal(assigned.status, 200);
+  assert.equal(assigned.body.state.tokens.find(t => t.id === priorCharacter)!.ownerId, undefined);
+  const mine = await GET(new Request(`http://localhost/api/game?room=${room}`, { headers: { Authorization: `Bearer ${player.body.token}` } }));
+  assert.equal((await mine.json() as ApiSnapshot).me.characterId, 'companion-eira');
+  const oldHeroEdit = await post({ type: 'action', room, action: action('character', { tokenId: priorCharacter, notes: 'Unauthorized edit' }) }, player.body.token);
+  assert.equal(oldHeroEdit.status, 403);
+  const newHeroEdit = await post({ type: 'action', room, action: action('character', { tokenId: 'companion-eira', notes: 'I control this character now.' }) }, player.body.token);
+  assert.equal(newHeroEdit.status, 200);
+});
+
+test('campaign downloads are GM-only and include hidden world content without credentials', async () => {
+  const created = await post({ type: 'create', name: 'Archivist GM', requireInvite: true });
+  const { room, token, inviteCode } = created.body;
+  const player = await post({ type: 'join', room, name: 'Archive player', inviteCode });
+  await post({ type: 'action', room, action: action('world', { op: 'notes', text: 'Private plot for the GM archive.' }) }, token);
+  const url = `http://localhost/api/game?room=${room}&download=campaign`;
+  assert.equal((await GET(new Request(url))).status, 401);
+  assert.equal((await GET(new Request(url, { headers: { Authorization: `Bearer ${player.body.token}` } }))).status, 403);
+  const download = await GET(new Request(url, { headers: { Authorization: `Bearer ${token}` } }));
+  assert.equal(download.status, 200);
+  assert.equal(download.headers.get('Content-Disposition'), `attachment; filename="hearthbound-${room}.json"`);
+  const archiveText = await download.text(), archive = JSON.parse(archiveText);
+  assert.equal(archive.format, 'hearthbound-campaign');
+  assert.equal(archive.version, 1);
+  assert.match(archiveText, /Private plot for the GM archive/);
+  for (const privateValue of [token!, inviteCode!, created.body.recoveryCode!, 'tokenHash', 'accountHash', 'recoveryHash', 'inviteHash']) assert.ok(!archiveText.includes(privateValue));
+});
+
+test('local and LAN mode never trust spoofed hosted-account headers', async t => {
+  const env = (globalThis as unknown as { __testGameEnv: { HEARTHBOUND_LOCAL_MODE?: string } }).__testGameEnv;
+  const previous = env.HEARTHBOUND_LOCAL_MODE;
+  env.HEARTHBOUND_LOCAL_MODE = 'true';
+  t.after(() => { if (previous === undefined) delete env.HEARTHBOUND_LOCAL_MODE; else env.HEARTHBOUND_LOCAL_MODE = previous; });
+  const spoofed = async (body: unknown) => {
+    const response = await POST(new Request('http://localhost/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json', 'oai-authenticated-user-id': 'forged-lan-identity' }, body: JSON.stringify(body) }));
+    return { status: response.status, body: await response.json() as ApiSnapshot };
+  };
+  const created = await spoofed({ type: 'create', name: 'Local GM' });
+  assert.equal(created.status, 201);
+  const stored = JSON.parse(rows.get(created.body.room)!.state_json);
+  assert.equal(stored.members[0].accountHash, undefined);
+  assert.equal((await spoofed({ type: 'recover', room: created.body.room })).status, 401);
+  const privateRecovery = await spoofed({ type: 'recover', room: created.body.room, recoveryCode: created.body.recoveryCode });
+  assert.equal(privateRecovery.status, 200);
+  assert.equal(privateRecovery.body.me.id, created.body.me.id);
 });
