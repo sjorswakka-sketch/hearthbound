@@ -1,0 +1,38 @@
+[
+  {
+    "id": "srd-5.1",
+    "title": "System Reference Document 5.1",
+    "edition": "D&D 2014 / 5e",
+    "source": "https://media.dndbeyond.com/compendium-images/srd/5.1/SRD_CC_v5.1.pdf",
+    "sourcePage": "https://www.dndbeyond.com/srd",
+    "pdf": "/rules/srd-5.1.pdf",
+    "json": "/rules/srd-5.1.json",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "attribution": "This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "pageCount": 403,
+    "sha256": "2504d2a0abb0a4d491a939be4f17910a2dde0312570ab8d208080225ccf0a1f0",
+    "pdfBytes": 3158713,
+    "textCharacters": 1377805,
+    "coverage": "Complete official SRD reference; engine automation is tracked separately.",
+    "extractionNotes": "Text extracted using pypdf with Unicode compatibility normalization and whitespace cleanup. All PDF pages are included. Columns, tables, line-wrap hyphens, and display capitalization may differ in extracted text; use the original PDF for exact layout and wording. Original PDF bytes are unchanged."
+  },
+  {
+    "id": "srd-5.2.1",
+    "title": "System Reference Document 5.2.1",
+    "edition": "D&D 2024 / 5.5e",
+    "source": "https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf",
+    "sourcePage": "https://www.dndbeyond.com/srd",
+    "pdf": "/rules/srd-5.2.1.pdf",
+    "json": "/rules/srd-5.2.1.json",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "attribution": "This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+    "pageCount": 364,
+    "sha256": "8974902d109d6e63672d7c490bde9ccf052410503d9cfa768237154fbc5e3d87",
+    "pdfBytes": 6031375,
+    "textCharacters": 1386280,
+    "coverage": "Complete official SRD reference; engine automation is tracked separately.",
+    "extractionNotes": "Text extracted using pypdf with Unicode compatibility normalization and whitespace cleanup. All PDF pages are included. Columns, tables, line-wrap hyphens, and display capitalization may differ in extracted text; use the original PDF for exact layout and wording. Original PDF bytes are unchanged."
+  }
+]

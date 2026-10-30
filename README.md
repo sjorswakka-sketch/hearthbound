@@ -1,58 +1,61 @@
-# Hearthbound — First Playable Prototype
+# Hearthbound — v0.2 test edition
 
-Hearthbound is a shared visual fantasy tabletop. A human Game Master guides an adventure while players move their characters, roll dice, chat, interact with objects, and fight in the same persistent scene.
+Hearthbound is a shared visual fantasy tabletop for one Game Master and up to seven players. Everyone at a table explores the same persistent map, with character sheets, dice, turns, narration and GM-controlled rules.
 
-The accompanying **BUILD_PROMPT.md** describes the complete product vision. This prototype implements its first foundation; it is not yet a complete D&D rules engine.
+Choose **D&D 2014 · SRD 5.1** or **D&D 2024 · SRD 5.2.1** when creating a campaign. Both complete official SRDs are included: **403 + 364 = 767 pages**, with searchable text and original PDFs available locally. A campaign keeps its selected edition across app updates.
+
+**Complete reference coverage is not complete rules automation.** The app implements the mechanics below; the human GM resolves the remaining rules using the sourcebooks. The SRDs do not contain every published D&D book, subclass or supplement. See [RULES-LICENSE.md](RULES-LICENSE.md) for sources, Creative Commons attribution and extraction notes.
 
 ## Windows testing and updates
 
-Download **Hearthbound-Windows-test.zip** from [Releases](https://github.com/sjorswakka-sketch/hearthbound/releases), extract the entire archive, and double-click **START-HEARTHBOUND.cmd**. Install Node.js 24 first; the launcher explains where to get it if it is missing. The first start downloads dependencies and prepares the local app. Keep its window open while playing.
+Download **Hearthbound-Windows-test.zip** from [Releases](https://github.com/sjorswakka-sketch/hearthbound/releases), extract it fully, and double-click **START-HEARTHBOUND.cmd**. Install Node.js 24 first. Initial setup downloads dependencies and builds the local app; keep the launcher open while playing. This is a source-based test package, not a standalone EXE.
 
-For the next update, stop the old window, download the new release, and extract it into a new folder. Local campaign data stays in `%LOCALAPPDATA%/Hearthbound`, and browser access is preserved by using the same `http://127.0.0.1:8787` address.
+For an update, stop the old version and extract the new release into a new folder. Campaign data stays in `%LOCALAPPDATA%\Hearthbound`. Keep the same browser and `http://127.0.0.1:8787` address, and save your personal recovery code before switching browsers. See [TESTING-WINDOWS.md](TESTING-WINDOWS.md).
 
-Read [TESTING-WINDOWS.md](TESTING-WINDOWS.md) for the complete tester guide. This is a source-based test build, not a standalone EXE. New pushes to `main` produce a Windows test artifact after checks pass; version tags produce a downloadable release.
-
-The repository is private. Invite testers through [repository access settings](https://github.com/sjorswakka-sketch/hearthbound/settings/access), or share the downloaded ZIP directly. Receiving this ZIP does not grant access to the hosted Site. Separate local installs do not share a database: a multiplayer group must connect to the same hosted server, with access arranged for every player.
+The [GitHub repository](https://github.com/sjorswakka-sketch/hearthbound) is public, so testers can download releases or receive the ZIP directly. The hosted Site currently remains private to its owner. A multiplayer group must open **the same hosted server URL** after site access is arranged for everyone. Separate Windows installations have separate worlds. A public GitHub download or table code does not grant hosted site access.
 
 ## Start a session
 
-1. Open the application and create a table as the GM.
-2. Share the six-character room code with your players. They must also be able to access the same hosted application; a room code does not bypass the hosting site's access settings.
-3. Each player joins from their own browser session, enters a character name, and chooses fighter, rogue, cleric, or wizard.
-4. As GM, write the opening narration and use **Set Rule** to establish the table's rules.
-5. Select a character and move across the map. Move beside a door or chest to interact with it. Use the dice controls and chat to resolve creative actions together.
-6. Start combat as GM, follow initiative, and advance turns. End combat to return to exploration.
+1. Create a table as GM and choose its rules edition. Share the server URL and six-character table code.
+2. Players join from separate browser sessions and choose one of twelve classes. The GM reviews each starting profile against the selected SRD.
+3. Open **Adventure desk → Session** and privately save your personal recovery code. Each participant has their own code.
+4. Use the GM panel to publish opening narration and **Set Rule** for movement, friendly fire and house rules.
+5. Use **Adventure desk** for Rulebooks, Character and Actions. Select a map token to move, attack or interact with an adjacent door or chest.
+6. The GM can edit maps, create scenes, reveal areas, keep private notes, and start or advance encounters. End combat before changing scenes or editing terrain.
 
-For a solo multiplayer check, use separate browser profiles or a private window for the players. Refreshing an existing browser session should restore its access.
+For a multiplayer check on one computer, use a normal browser for the GM and a private window for a player. Updates appear after a short polling delay.
 
-## What works
+## What v0.2 supports
 
-- A shared 20 × 14 scene with terrain, walls, water, doors, a chest, companions, and enemies.
-- One GM and up to seven players, with separate permissions and character ownership.
-- Server-validated movement, blocked terrain, closed doors, and combat movement budgets.
-- Server-generated polyhedral dice, modifiers, and d20 advantage/disadvantage.
-- Basic initiative, turn order, attacks, armor class, damage, and downed characters.
-- GM narration, shared chat, and the most recent 100 log entries.
-- Enforced settings for friendly fire, diagonal movement, and movement limits.
-- Separate free-text narrative rules for the GM to adjudicate.
-- Campaign storage in a database, synchronized updates, and browser refresh recovery.
-- GM-controlled party recovery outside combat (a simplified Rest party action).
+- **Characters:** all twelve single-class starting profiles, GM-controlled levels 1–20 and ability/skill setup, derived statistics, inventory notes and character behavior notes. The GM can adjust statistics with a recorded reason.
+- **Core play:** authoritative movement, walls, water and closed doors; initiative, attacks, armor class, critical damage and supported Extra Attack progression; ability/skill checks, saves and advantage/disadvantage.
+- **Resources:** action, bonus action and reaction tracking; Dash, Dodge, Disengage, Help, Ready and standing from prone; conditions with selected mechanical effects, edition-specific exhaustion, death saves and GM-approved HP changes/revival.
+- **Spellcasting and rests:** single-class spell and Pact Magic slots, edition-specific casting restrictions, concentration saves, Hit Dice, and GM-granted short/long rest recovery.
+- **World building:** up to twelve persistent scenes with harbor, forest and crypt templates; terrain/object painting and creature placement. Scene travel carries the party together and preserves each location's terrain, objects and creatures.
+- **Privacy:** GM-controlled fog with server-filtered concealed terrain, objects and creatures, private GM notes, and hidden-scene filtering. Players cannot act on unrevealed destinations or targets. Shared chat and narration remain public to the table.
+- **Sessions:** database persistence, concurrent update checks, per-character ownership, private recovery codes and supported hosted-account recovery.
+- **Reference and assistance:** both complete offline SRDs, plus an optional GM-only AI drafting assistant when the host configures it.
 
-Synchronization uses repeated server updates, so other clients may see a short delay. The GM controls enemies and unclaimed companions. New characters join outside combat.
+## Where the GM still makes the ruling
 
-## Current limits
+The twelve profiles are starting sheets, not complete character builders. Origins/species, backgrounds, subclasses, feats, multiclassing, many class features and equipment effects require GM review. Rebuilding a sheet recalculates statistics and resets resources; manual statistics changes last until the GM changes them again.
 
-All participants can see the whole map and every token. Fog of war, private GM notes, hidden creatures, and personal vision are not implemented. Do not enter secrets in shared narration or rules.
+Casting records a declared spell and spends resources. It does not validate preparation, components, targets, range or the spell's effects. The GM resolves those from the chosen SRD, then applies HP, condition or statistic changes. Inventory entries do not automatically equip, consume or grant items. Opening a chest is a story event.
 
-Character statistics and combat are simplified. The class choices are starter profiles, not full class implementations. Spells, class features, reactions, bonus actions, full rest rules, conditions, death saves, full character creation, inventory, and progression remain to be built. Opening the chest creates a story event; it does not add an inventory item.
+Condition handling is partial. Cover, line of sight, automatic lighting/vision, opportunity-attack triggers, detailed grappling, feature durations and many special interactions need a ruling. Help and Ready track action use; their precise effects and triggers are manual. Rest eligibility, elapsed time, daily limits and additional feature recovery are also manual. Free-text house rules and character behavior are guidance, not executable instructions.
 
-There is no AI generation or autonomous character behavior yet. The GM's prompt publishes narration; it does not automatically build a new map. Narrative rules are visible guidance, while only the listed mechanical settings are enforced.
+Fog is manually revealed by the GM; it does not calculate individual sight or darkvision. Character notes on visible tokens are shared, so put secrets in **Private GM notes**. With fog enabled, non-public mechanical logs are withheld from players to avoid revealing concealed information. History retains the most recent 100 log entries.
 
-Session access is retained in the browser. Switch table preserves this browser's saved roles; re-enter the same room code to resume. Clearing browser storage or using a different browser can lose access to that character or GM role. Recovery, account-based ownership, player removal, and invitation rotation are not implemented yet. Keep the GM's original browser session.
+The optional AI assistant drafts narration, NPC dialogue or rules discussion for GM review. It does not automatically build maps, act for characters or apply game changes. It stays disabled without host configuration; play and rulebooks work without AI. Provider access, available credits and usage costs depend on the host's provider account.
+
+## Restore your place
+
+Choose **Restore** on the welcome screen, enter the table code and your private recovery code. Restoration preserves your role and character, rotates both credentials, and invalidates the old session. Save the replacement code from **Adventure desk → Session**. Share only the table code with friends.
+
+On a hosted server that supplies authenticated account identity, leaving the recovery field blank can restore a single linked seat. If the account has no linked seat or multiple seats in that campaign, use the personal code. Local Windows play needs the code. Older campaigns may have no saved recovery code; preserve their original browser access. Switching tables preserves this browser's saved sessions.
 
 ## Continue development
 
-Use **BUILD_PROMPT.md** for the next milestones and acceptance tests. Priority additions are durable account recovery, richer character sheets, complete combat and spells, privacy-aware fog of war, a map editor, and optional AI assistance.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for setup and checks, and [BUILD_PROMPT.md](BUILD_PROMPT.md) for the broader vision. Existing legacy campaigns retain their prototype rules rather than silently changing edition. Remaining work includes broader rules automation, structured character choices, revocable invitations, player removal, richer vision and campaign export/history.
 
-The source is maintained in [sjorswakka-sketch/hearthbound](https://github.com/sjorswakka-sketch/hearthbound). Windows test builds and hosted Site deployments are separate: pushing to GitHub creates test builds; it does not automatically redeploy the hosted app.
-
+Successful `main` checks produce a Windows testing artifact; version tags produce release downloads. GitHub pushes and hosted Site deployments are separate, so publishing a test build does not redeploy the hosted app.

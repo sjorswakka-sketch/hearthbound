@@ -38,7 +38,7 @@ jobs:
       - name: Check TypeScript
         run: node node_modules/typescript/bin/tsc --noEmit
       - name: Test rules, API permissions, concurrency, and launcher
-        run: node --test --experimental-strip-types tests/game.test.ts tests/game-api.test.ts tests/windows-launcher.test.mjs
+        run: node --test --experimental-strip-types tests/game.test.ts tests/game-api.test.ts tests/rules-engine.test.ts tests/rules-library.test.mjs tests/world-session.test.ts tests/windows-launcher.test.mjs
       - name: Verify reopening preserves the database
         env:
           HEARTHBOUND_DATA_DIR: ${{ runner.temp }}\hearthbound-test-data

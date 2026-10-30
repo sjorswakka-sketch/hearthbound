@@ -1,45 +1,70 @@
-# Test Hearthbound on Windows
+# Test Hearthbound v0.2 on Windows
 
-This package runs the current Hearthbound web app on your Windows computer and opens it in your browser. It is a source-based test package, not a standalone EXE. You do not need Git or a developer account to run an extracted copy.
+This package runs Hearthbound on Windows and opens it in your browser. It is a source-based test package, not a standalone EXE. You do not need Git or a developer account to run an extracted copy.
 
 ## First launch
 
-1. Install **Node.js 24** from [the official Node.js download page](https://nodejs.org/en/download). Keep the installer's default option to add Node to PATH. If Node was just installed, close and reopen any existing terminal windows.
-2. Download **Hearthbound-Windows-test.zip** from [Hearthbound Releases](https://github.com/sjorswakka-sketch/hearthbound/releases). If the repository is private, the owner must first grant your GitHub account access. The owner may also send you the ZIP directly.
-3. Right-click the ZIP, choose **Extract All**, and open the extracted **Hearthbound** folder. Use a folder you can write to, such as Documents. Do not run it inside the ZIP or inside Program Files.
-4. Double-click **START-HEARTHBOUND.cmd**. The first launch downloads dependencies, builds the app, and prepares its local database. Internet is required for setup. Keep the window open while playing.
-5. Your browser opens at **http://127.0.0.1:8787**. Create a table as GM or join a table in that server using its six-character code.
+1. Install **Node.js 24** from [the official download page](https://nodejs.org/en/download). Keep the default option to add Node to PATH; reopen terminal windows after installation.
+2. Download **Hearthbound-Windows-test.zip** from [Hearthbound Releases](https://github.com/sjorswakka-sketch/hearthbound/releases). The repository is public; no repository invitation is needed. You can also receive the ZIP directly.
+3. Right-click the ZIP and choose **Extract All**. Open its **Hearthbound** folder in a writable location such as Documents. Do not run inside the ZIP or Program Files.
+4. Double-click **START-HEARTHBOUND.cmd**. Initial setup needs internet to download dependencies, build the app and prepare its database. Keep the launcher open while playing.
+5. Your browser opens at **http://127.0.0.1:8787**. Create a table and choose D&D 2014/SRD 5.1 or D&D 2024/SRD 5.2.1.
+6. Open **Adventure desk → Session**, copy your personal recovery code, and store it privately.
 
-To stop the local server, return to the launcher window and press **Ctrl+C**. If another copy is already running, use that copy or stop it before starting a new version.
+Stop the server with **Ctrl+C** in the launcher. Only one local copy can use port 8787. Both complete rulebooks and PDFs are included locally; after setup, local play and the rule library do not require an AI connection.
 
 ## Install an update
 
-1. Stop the old version.
-2. Download the newest testing ZIP and extract it into a **new folder**.
-3. Run the new folder's **START-HEARTHBOUND.cmd**. New dependencies and database migrations are applied as needed.
+1. Save your personal recovery code, then stop the old version.
+2. Download the new ZIP and extract it into a **new folder**.
+3. Run the new folder's **START-HEARTHBOUND.cmd**. It installs changed dependencies and applies tracked migrations as needed.
 
-Local campaigns are stored separately in **%LOCALAPPDATA%\Hearthbound**, so replacing the application folder does not remove them. Your browser holds the credentials for your GM/player role: keep using the same browser profile and the same address, and do not clear its site data. New releases should preserve existing campaigns; return to an older version only when its release notes explicitly support that database version.
+Campaigns stay in **%LOCALAPPDATA%\Hearthbound**, outside the application folder. Keep the same browser profile and address to retain your session. Campaigns keep their rules edition; older prototype campaigns remain legacy campaigns. Only return to an older app version if its release notes support the current database format.
 
 ## Playing in the same world
 
-**Everyone must connect to the same server address.** Installing a separate local copy on each computer creates separate databases and separate worlds; matching room codes will not connect those copies.
+**Everyone must use the same server address.** Separate local installs create separate databases; matching table codes cannot connect them.
 
-For a local multiplayer check on one computer, use the normal browser for the GM and a private window or another browser profile for a player. Enter the same table code in both.
+To test on one computer, use a normal browser for the GM and a private window or another profile for a player. Join the same six-character table code. End combat before adding a new player. Other clients may take a moment to show updates.
 
-For friends on different computers, use the same hosted Hearthbound app after its owner has granted everyone access. Then share the table code inside that app. GitHub repository access does not grant access to the hosted site. The Windows launcher deliberately listens only on your computer; it does not expose a server to the internet or change your firewall.
+For friends on different computers, open the same hosted Hearthbound site after its owner grants everyone access, then share the table code. The hosted Site currently remains owner-private; public GitHub downloads do not grant site access. The Windows launcher listens only on your computer; it does not expose an internet server or alter your firewall.
+
+## Restore a GM or player session
+
+Your **table code** is shared with the group. Your **personal recovery code** restores your individual role and character and must stay private.
+
+1. On the welcome screen, choose **Restore**.
+2. Enter the table code and your personal recovery code.
+3. Open **Adventure desk → Session** and save the replacement recovery code. Restoration invalidates the old code and browser session for that seat.
+
+On a supported hosted server, leaving the recovery field blank can restore the single campaign seat linked to your signed-in account. Local Windows play needs the personal code. If your hosted account has multiple seats in a campaign, use that seat's code. Older sessions may have no saved recovery code; preserve their original browser data. Switching tables retains saved credentials in that browser.
+
+## What to try in v0.2
+
+- **Rulebooks:** search both editions for a spell, class and monster, then open the original PDF at that page. The library contains all 403 SRD 5.1 pages and all 364 SRD 5.2.1 pages.
+- **Characters:** join with any of twelve classes. Ask the GM to configure level, abilities and skills; save inventory/behavior notes; roll a check or save. Rebuilding a sheet resets derived statistics and resources.
+- **Encounters:** move, attack and advance initiative; try Dash/Dodge, action resources, conditions, spell slots, concentration, death saves and rests. A player must not control another player's character or grant their own HP/resources.
+- **Maps and scenes:** as GM, end combat, open **Maps, scenes & fog**, create a location, paint terrain, add a door/chest or creature, then travel away and back. The location should remember edits and creatures.
+- **Fog and secrets:** enable fog, reveal selected squares and compare GM/player windows. Unrevealed cells, objects and creatures should be absent from the player's view. Keep secrets in **Private GM notes**; visible character notes and shared narration are public. Fog suppresses mechanical logs that could disclose hidden information.
+- **Recovery:** save a player's code, restore it in a third browser, and verify the same character returns while the old session loses access. Keep the GM's code separate.
+- **AI assistant:** an unconfigured server should clearly say AI is not connected. This is expected. When the host configures it, only the GM can request a draft and decide whether to share it.
+
+The complete SRDs are reference books, not a promise that every rule is automated. The GM still resolves origins, subclasses, feats, many class features, spell legality/effects, equipment effects, cover, sight and unusual actions. Inventory does not automatically equip or consume items. Fog is manually revealed, and temporary statistics need manual removal. See [README.md](README.md) for scope.
 
 ## Get builds between releases
 
-Every successful update to **main** produces a testing download in [GitHub Actions](https://github.com/sjorswakka-sketch/hearthbound/actions/workflows/windows-test.yml). Open a successful **Windows test package** run and download its **Hearthbound-Windows-test** artifact. GitHub wraps the files in an outer ZIP; extract that, then extract **Hearthbound-Windows-test.zip** inside it.
+Successful **main** updates produce a download in [GitHub Actions](https://github.com/sjorswakka-sketch/hearthbound/actions/workflows/windows-test.yml). Open a successful **Windows test package** run and download **Hearthbound-Windows-test**. Extract GitHub's outer ZIP, then extract **Hearthbound-Windows-test.zip** inside it.
 
-For a stable link to share, prefer the [Releases page](https://github.com/sjorswakka-sketch/hearthbound/releases). Repository collaborators can subscribe to release notifications through GitHub's Watch menu. Access to private repository downloads still requires signing in with an invited account.
+For a stable sharing link and public download, use [Releases](https://github.com/sjorswakka-sketch/hearthbound/releases). Actions artifact downloads may require GitHub sign-in. Hosted app updates are deployed separately.
 
 ## When something fails
 
-- **Node.js is missing or too old:** install Node.js 24 from the official page, then relaunch.
-- **Dependency download failed:** check the internet connection and rerun the launcher. Do not delete your campaign data.
-- **Port 8787 is occupied:** stop the earlier Hearthbound launcher before trying again.
-- **A friend cannot join:** confirm they are using the exact same server URL and have site access; the GM must end combat before a new player can join.
-- **Your GM role disappeared:** use the original browser profile. Switching tables preserves saved credentials in that browser; clearing browser storage does not.
+- **Node.js is missing or too old:** install Node.js 24 and relaunch.
+- **Dependency download fails:** check internet access and rerun. Do not delete campaign data.
+- **Port 8787 is occupied:** stop the previous launcher first.
+- **A friend cannot join:** check the exact URL and site access, and end combat before joining.
+- **Your role is missing:** try the original browser profile or **Restore** with the latest personal code.
+- **A code fails after restoration:** use the replacement code saved by the restored session.
+- **AI is unavailable:** local play works without it. The host must configure server credentials and a model; provider access and quota depend on that account.
 
-When reporting a bug, include the release/tag or commit, Windows version, what you clicked, and the message shown. Do not share browser session tokens or your local database.
+Report the release/tag or commit, Windows version, clicks that caused the issue and the displayed message. Never include recovery codes, browser credentials, API keys or your local database in a bug report.
